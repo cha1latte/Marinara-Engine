@@ -2,7 +2,17 @@
 
 ### Release 1.3.0
 
-**An AI-powered chat & roleplay engine** — with conversation, roleplay, and visual novel modes, a full character & sprite system, 18 built-in AI agents, turn-based combat, lorebooks, and more.
+<h3 align="center"><b>Fun. Intuitive. Plug-And-Play.</b></h3>
+
+<p align="center">
+  <b>An AI-powered chat & roleplay engine</b> built around one idea: <b>you install it, you run it, it works.</b><br/>
+  No setup wizards, no config files, no cloud accounts. Just your characters, your stories, and your rules.<br/>
+  Designed to be <b>the most fun, approachable, and feature-rich</b> local AI frontend out there.
+</p>
+
+---
+
+**Conversation, roleplay, and visual novel modes** — a full character & sprite system, 18 built-in AI agents, turn-based combat, lorebooks, and more.
 
 Everything runs locally. No accounts, no cloud, no telemetry. Connect to any OpenAI-compatible API (OpenAI, Anthropic, Google, OpenRouter, Mistral, Cohere, or any custom endpoint, local included).
 
