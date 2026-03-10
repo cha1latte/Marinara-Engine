@@ -205,27 +205,61 @@ export function RoleplayHUD({ chatId, characterCount, layout = "top" }: Roleplay
           <TemperatureWidget value={temperature ?? ""} onSave={(v) => patchField("temperature", v)} />
         </>
       )}
-      {/* Combined player widget — merges Persona, Characters, Inventory, Quests into one button */}
+
+      {/* Mobile: combined Tracker widget */}
       {(enabledAgentTypes.has("persona-stats") || enabledAgentTypes.has("character-tracker") || enabledAgentTypes.has("quest")) && (
-        <CombinedPlayerWidget
-          layout={layout}
-          showPersona={enabledAgentTypes.has("persona-stats")}
-          showCharacters={enabledAgentTypes.has("character-tracker")}
-          showQuests={enabledAgentTypes.has("quest")}
-          personaStats={personaStatBars}
-          onUpdatePersonaStats={(bars) => patchField("personaStats", bars)}
-          characters={presentCharacters}
-          onUpdateCharacters={(chars) => {
-            if (gameState) {
-              setGameState({ ...gameState, presentCharacters: chars });
-            }
-            api.patch(`/chats/${chatId}/game-state`, { presentCharacters: chars }).catch(() => {});
-          }}
-          inventory={inventory}
-          onUpdateInventory={(items) => patchPlayerStats("inventory", items)}
-          quests={activeQuests}
-          onUpdateQuests={(q) => patchPlayerStats("activeQuests", q)}
-        />
+        <div className="md:hidden">
+          <CombinedPlayerWidget
+            layout={layout}
+            showPersona={enabledAgentTypes.has("persona-stats")}
+            showCharacters={enabledAgentTypes.has("character-tracker")}
+            showQuests={enabledAgentTypes.has("quest")}
+            personaStats={personaStatBars}
+            onUpdatePersonaStats={(bars) => patchField("personaStats", bars)}
+            characters={presentCharacters}
+            onUpdateCharacters={(chars) => {
+              if (gameState) {
+                setGameState({ ...gameState, presentCharacters: chars });
+              }
+              api.patch(`/chats/${chatId}/game-state`, { presentCharacters: chars }).catch(() => {});
+            }}
+            inventory={inventory}
+            onUpdateInventory={(items) => patchPlayerStats("inventory", items)}
+            quests={activeQuests}
+            onUpdateQuests={(q) => patchPlayerStats("activeQuests", q)}
+          />
+        </div>
+      )}
+
+      {/* Desktop: separate widgets */}
+      {enabledAgentTypes.has("persona-stats") && (
+        <div className="hidden md:block">
+          <PersonaStatsWidget bars={personaStatBars} onUpdate={(bars) => patchField("personaStats", bars)} layout={layout} />
+        </div>
+      )}
+      {enabledAgentTypes.has("character-tracker") && (
+        <div className="hidden md:block">
+          <CharactersWidget
+            characters={presentCharacters}
+            layout={layout}
+            onUpdate={(chars) => {
+              if (gameState) {
+                setGameState({ ...gameState, presentCharacters: chars });
+              }
+              api.patch(`/chats/${chatId}/game-state`, { presentCharacters: chars }).catch(() => {});
+            }}
+          />
+        </div>
+      )}
+      {enabledAgentTypes.has("persona-stats") && (
+        <div className="hidden md:block">
+          <InventoryWidget items={inventory} onUpdate={(items) => patchPlayerStats("inventory", items)} layout={layout} />
+        </div>
+      )}
+      {enabledAgentTypes.has("quest") && (
+        <div className="hidden md:block">
+          <QuestsWidget quests={activeQuests} onUpdate={(q) => patchPlayerStats("activeQuests", q)} layout={layout} />
+        </div>
       )}
     </div>
   );
