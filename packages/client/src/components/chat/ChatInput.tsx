@@ -245,7 +245,7 @@ export function ChatInput({ mode = "conversation", characterNames = [] }: ChatIn
         className={cn(
           "relative flex items-center gap-2 rounded-2xl border-2 px-4 py-2.5 transition-all duration-200",
           isRP
-            ? cn("bg-black/40", hasInput ? "border-blue-400/30 shadow-md shadow-blue-500/5" : "border-white/10")
+            ? cn("bg-black/40", hasInput ? "border-blue-400/30 shadow-md shadow-blue-500/5" : "border-white/30")
             : cn(
                 "bg-[var(--secondary)]",
                 hasInput
@@ -284,7 +284,7 @@ export function ChatInput({ mode = "conversation", characterNames = [] }: ChatIn
           spellCheck={false}
           autoCorrect="off"
           className={cn(
-            "max-h-[200px] min-h-[24px] flex-1 resize-none bg-transparent py-0 text-sm leading-relaxed outline-none disabled:cursor-not-allowed disabled:opacity-40",
+            "max-h-[200px] flex-1 resize-none bg-transparent py-0 text-sm leading-normal outline-none disabled:cursor-not-allowed disabled:opacity-40",
             isRP
               ? "text-white/90 placeholder:text-white/30"
               : "text-[var(--foreground)] placeholder:text-[var(--muted-foreground)]",
