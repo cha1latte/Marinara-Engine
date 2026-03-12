@@ -290,17 +290,19 @@ function AppearanceSettings() {
       <label className="flex flex-col gap-1">
         <span className="text-xs font-medium inline-flex items-center gap-1">
           Display Size{" "}
-          <HelpTooltip text="Adjusts the base font size across the whole app. Larger sizes improve readability. Default is 14px." />
+          <HelpTooltip text="Adjusts the base font size across the whole app. Larger sizes improve readability. Default is 17px." />
         </span>
         <select
           value={String(fontSize)}
-          onChange={(e) => setFontSize(Number(e.target.value) as 12 | 14 | 16 | 17)}
+          onChange={(e) => setFontSize(Number(e.target.value) as 12 | 14 | 16 | 17 | 19 | 22)}
           className="rounded-lg bg-[var(--secondary)] px-3 py-2 text-xs outline-none ring-1 ring-transparent transition-shadow focus:ring-[var(--primary)]"
         >
-          <option value="12">Small</option>
-          <option value="14">Default</option>
-          <option value="16">Large</option>
-          <option value="17">Extra Large</option>
+          <option value="12">Tiny</option>
+          <option value="14">Small</option>
+          <option value="16">Medium</option>
+          <option value="17">Default</option>
+          <option value="19">Large</option>
+          <option value="22">Huge</option>
         </select>
       </label>
 
@@ -877,7 +879,7 @@ function ThemesSettings() {
           onClick={() => fileRef.current?.click()}
           className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-[var(--border)] p-3 text-xs text-[var(--muted-foreground)] transition-all hover:border-[var(--primary)]/40 hover:bg-[var(--secondary)]/50"
         >
-          <Upload size={14} /> Import File
+          <Download size={14} /> Import File
         </button>
       </div>
       <input ref={fileRef} type="file" accept=".css,.json" className="hidden" onChange={handleImportTheme} />
@@ -1056,7 +1058,7 @@ function ExtensionsSettings() {
         onClick={() => fileRef.current?.click()}
         className="flex items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-[var(--border)] p-3 text-xs text-[var(--muted-foreground)] transition-all hover:border-[var(--primary)]/40 hover:bg-[var(--secondary)]/50"
       >
-        <Upload size={14} /> Import Extension (.json or .css)
+        <Download size={14} /> Import Extension (.json or .css)
       </button>
       <input ref={fileRef} type="file" accept=".json,.css" className="hidden" onChange={handleImportExtension} />
 
@@ -1156,7 +1158,7 @@ function ImportSettings() {
 
       {/* Marinara import */}
       <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-pink-500/20 to-orange-500/20 px-3 py-3 text-xs font-semibold ring-1 ring-pink-500/30 transition-all hover:ring-pink-500/50 active:scale-[0.98]">
-        <Upload size={16} />
+        <Download size={16} />
         Import Marinara File (.marinara.json)
         <input type="file" accept=".json" onChange={handleMarinaraImport} className="hidden" />
       </label>

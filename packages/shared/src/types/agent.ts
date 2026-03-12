@@ -6,7 +6,7 @@
 export type AgentPhase =
   /** Before the main generation (can modify prompt context) */
   | "pre_generation"
-  /** In parallel with or after the main generation */
+  /** Fires alongside the main generation (does not receive mainResponse) */
   | "parallel"
   /** After the main response is complete (can modify it) */
   | "post_processing";
@@ -521,16 +521,23 @@ export const BUILT_IN_TOOLS: ToolDefinition[] = [
   {
     name: "spotify_get_playlist_tracks",
     description:
-      "Get tracks from a specific playlist or the user's Liked Songs. Returns track names, artists, and URIs.",
+      "Get tracks from a specific playlist or the user's Liked Songs. For Liked Songs (playlistId='liked'), returns the FULL library automatically (up to 500 tracks). For regular playlists, returns a paginated batch.",
     parameters: {
       type: "object",
       properties: {
         playlistId: {
           type: "string",
-          description: "Playlist ID (from spotify_get_playlists), or 'liked' for the user's Liked Songs",
+          description: "Playlist ID (from spotify_get_playlists), or 'liked' for the user's full Liked Songs library",
         },
-        limit: { type: "number", description: "Number of tracks to return (default: 30, max: 50)" },
-        offset: { type: "number", description: "Offset for pagination (default: 0)" },
+        limit: {
+          type: "number",
+          description:
+            "Number of tracks to return for regular playlists (default: 30, max: 50). Ignored for 'liked' which auto-fetches all.",
+        },
+        offset: {
+          type: "number",
+          description: "Offset for pagination for regular playlists (default: 0). Ignored for 'liked'.",
+        },
       },
       required: ["playlistId"],
     },

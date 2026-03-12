@@ -29,6 +29,7 @@ import { useLorebooks } from "../../hooks/use-lorebooks";
 import { usePresets } from "../../hooks/use-presets";
 import { useConnections } from "../../hooks/use-connections";
 import { useUpdateChat, useUpdateChatMetadata, useChat, useCreateMessage } from "../../hooks/use-chats";
+import { api } from "../../lib/api-client";
 import { useUIStore } from "../../stores/ui.store";
 import type { Chat } from "@marinara-engine/shared";
 
@@ -94,17 +95,26 @@ export function ChatSettingsDrawer({ chat, open, onClose }: ChatSettingsDrawerPr
     charId: string;
     charName: string;
     message: string;
+    alternateGreetings: string[];
   } | null>(null);
 
-  const handleFirstMesConfirm = useCallback(() => {
+  const handleFirstMesConfirm = useCallback(async () => {
     if (!firstMesConfirm) return;
-    createMessage.mutate({
+    const msg = await createMessage.mutateAsync({
       role: "assistant",
       content: firstMesConfirm.message,
       characterId: firstMesConfirm.charId,
     });
+    // Add alternate greetings as swipes on the first message
+    if (msg?.id && firstMesConfirm.alternateGreetings.length > 0) {
+      for (const greeting of firstMesConfirm.alternateGreetings) {
+        if (greeting.trim()) {
+          await api.post(`/chats/${chat.id}/messages/${msg.id}/swipes`, { content: greeting });
+        }
+      }
+    }
     setFirstMesConfirm(null);
-  }, [firstMesConfirm, createMessage]);
+  }, [firstMesConfirm, createMessage, chat.id]);
 
   // ── Mutations ──
   const toggleCharacter = (charId: string) => {
@@ -124,8 +134,14 @@ export function ChatSettingsDrawer({ chat, open, onClose }: ChatSettingsDrawerPr
             try {
               const parsed = typeof char.data === "string" ? JSON.parse(char.data) : char.data;
               const firstMes = (parsed as { first_mes?: string }).first_mes;
+              const altGreetings = (parsed as { alternate_greetings?: string[] }).alternate_greetings ?? [];
               if (firstMes) {
-                setFirstMesConfirm({ charId, charName: charName(char), message: firstMes });
+                setFirstMesConfirm({
+                  charId,
+                  charName: charName(char),
+                  message: firstMes,
+                  alternateGreetings: altGreetings,
+                });
               }
             } catch {
               /* ignore parse errors */

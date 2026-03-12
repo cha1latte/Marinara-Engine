@@ -319,8 +319,6 @@ async function spotifyGetPlaylistTracks(
     return { error: "Spotify not configured. Please add your Spotify access token in the Spotify DJ agent settings." };
   }
   const playlistId = String(args.playlistId ?? "");
-  const limit = Math.min(Number(args.limit ?? 30), 50);
-  const offset = Math.max(0, Number(args.offset ?? 0));
 
   if (!playlistId) {
     return {
@@ -329,11 +327,58 @@ async function spotifyGetPlaylistTracks(
   }
 
   try {
-    // Liked Songs use a different endpoint
-    const url =
-      playlistId === "liked"
-        ? `https://api.spotify.com/v1/me/tracks?${new URLSearchParams({ limit: String(limit), offset: String(offset) })}`
-        : `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}/tracks?${new URLSearchParams({ limit: String(limit), offset: String(offset) })}`;
+    // Liked Songs: auto-paginate to fetch the full library
+    if (playlistId === "liked") {
+      const allTracks: Array<{ uri: string; name: string; artist: string; album: string }> = [];
+      let offset = 0;
+      const batchSize = 50;
+      const MAX_LIKED = 500; // Safety cap to avoid overwhelming LLM context
+
+      while (offset < MAX_LIKED) {
+        const url = `https://api.spotify.com/v1/me/tracks?${new URLSearchParams({ limit: String(batchSize), offset: String(offset) })}`;
+        const res = await fetch(url, {
+          headers: { Authorization: `Bearer ${creds.accessToken}` },
+          signal: AbortSignal.timeout(15_000),
+        });
+        if (!res.ok) {
+          const body = await res.text();
+          return { error: `Spotify API error (${res.status}): ${body.slice(0, 200)}` };
+        }
+        const data = (await res.json()) as {
+          items?: Array<{
+            track: { uri: string; name: string; artists: Array<{ name: string }>; album: { name: string } };
+          }>;
+          total?: number;
+          next?: string | null;
+        };
+        const batch = (data.items ?? [])
+          .filter((item) => item.track)
+          .map((item) => ({
+            uri: item.track.uri,
+            name: item.track.name,
+            artist: item.track.artists.map((a) => a.name).join(", "),
+            album: item.track.album.name,
+          }));
+        allTracks.push(...batch);
+
+        // Stop if we've fetched everything or there are no more pages
+        if (!data.next || batch.length < batchSize) break;
+        offset += batchSize;
+      }
+
+      return {
+        playlistId: "liked",
+        tracks: allTracks,
+        count: allTracks.length,
+        total: allTracks.length,
+        offset: 0,
+      };
+    }
+
+    // Regular playlists: paginated as before
+    const limit = Math.min(Number(args.limit ?? 30), 50);
+    const offset = Math.max(0, Number(args.offset ?? 0));
+    const url = `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}/tracks?${new URLSearchParams({ limit: String(limit), offset: String(offset) })}`;
 
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${creds.accessToken}` },

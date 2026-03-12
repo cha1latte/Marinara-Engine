@@ -323,6 +323,14 @@ export function ChatArea() {
     await retryAgents(activeChatId, failedAgentTypes);
   }, [activeChatId, isStreaming, agentProcessing, failedAgentTypes, retryAgents]);
 
+  const handleRerunTrackers = useCallback(async () => {
+    if (!activeChatId || isStreaming || agentProcessing) return;
+    const trackerIds = new Set(BUILT_IN_AGENTS.filter((a) => a.category === "tracker").map((a) => a.id));
+    const types = Array.from(enabledAgentTypes).filter((t) => trackerIds.has(t));
+    if (types.length === 0) return;
+    await retryAgents(activeChatId, types);
+  }, [activeChatId, isStreaming, agentProcessing, enabledAgentTypes, retryAgents]);
+
   const handleSetActiveSwipe = useCallback(
     (messageId: string, index: number) => {
       setActiveSwipe.mutate({ messageId, index });
@@ -659,7 +667,12 @@ export function ChatArea() {
                   </button>
                 </div>
                 <div className="w-8 border-t border-white/10" />
-                <RoleplayHUD chatId={chat.id} characterCount={chatCharIds.length} layout="left" />
+                <RoleplayHUD
+                  chatId={chat.id}
+                  characterCount={chatCharIds.length}
+                  layout="left"
+                  onRetriggerTrackers={handleRerunTrackers}
+                />
               </div>
             )}
 
@@ -669,10 +682,15 @@ export function ChatArea() {
                 <div className="pointer-events-none relative z-40 flex items-center px-4 py-2">
                   {chat && chatMeta.enableAgents && (
                     <div className="pointer-events-auto flex-1 overflow-x-auto">
-                      <RoleplayHUD chatId={chat.id} characterCount={chatCharIds.length} layout="top" />
+                      <RoleplayHUD
+                        chatId={chat.id}
+                        characterCount={chatCharIds.length}
+                        layout="top"
+                        onRetriggerTrackers={handleRerunTrackers}
+                      />
                     </div>
                   )}
-                  <div className="pointer-events-auto flex shrink-0 items-center gap-1.5 ml-2">
+                  <div className="pointer-events-auto flex shrink-0 items-center gap-1.5 ml-auto">
                     <ToolbarMenu>
                       <SummaryButton chatId={chat?.id ?? null} summary={chatMeta.summary ?? null} />
                       <button
@@ -711,47 +729,52 @@ export function ChatArea() {
               ) : (
                 <>
                   {/* Mobile fallback — top bar for left/right modes */}
-                  <div className="pointer-events-none relative z-40 flex items-center px-4 py-2 md:hidden">
+                  <div className="pointer-events-auto relative z-40 flex flex-col w-full md:hidden">
+                    {/* HUD widgets and action bar in a single row, with narrower widgets and no scroll */}
                     {chat && chatMeta.enableAgents && (
-                      <div className="pointer-events-auto flex-1 overflow-x-auto">
-                        <RoleplayHUD chatId={chat.id} characterCount={chatCharIds.length} layout="top" />
+                      <div className="flex w-full items-center gap-1.5 px-2 pt-2 pb-1">
+                        <RoleplayHUD
+                          chatId={chat.id}
+                          characterCount={chatCharIds.length}
+                          layout="top"
+                          onRetriggerTrackers={handleRerunTrackers}
+                          mobileCompact
+                        />
+                        <ToolbarMenu>
+                          <SummaryButton chatId={chat?.id ?? null} summary={chatMeta.summary ?? null} />
+                          <button
+                            onClick={() => setFilesOpen(true)}
+                            className="flex items-center justify-center rounded-full bg-white/5 border border-white/10 p-1 text-white/60 backdrop-blur-md transition-all hover:bg-white/10 hover:text-white"
+                            title="Manage Chat Files"
+                          >
+                            <FolderOpen size={14} />
+                          </button>
+                          {expressionAgentEnabled && chatCharIds.length > 0 && (
+                            <button
+                              onClick={handleToggleSpritePosition}
+                              className="flex items-center justify-center rounded-full bg-white/5 border border-white/10 p-1 text-white/60 backdrop-blur-md transition-all hover:bg-white/10 hover:text-white"
+                              title={`Sprite: ${spritePosition} side (click to flip)`}
+                            >
+                              <FlipHorizontal2 size={14} />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setGalleryOpen(true)}
+                            className="flex items-center justify-center rounded-full bg-white/5 border border-white/10 p-1 text-white/60 backdrop-blur-md transition-all hover:bg-white/10 hover:text-white"
+                            title="Gallery"
+                          >
+                            <Image size={14} />
+                          </button>
+                          <button
+                            onClick={() => setSettingsOpen(true)}
+                            className="flex items-center justify-center rounded-full bg-white/5 border border-white/10 p-1 text-white/60 backdrop-blur-md transition-all hover:bg-white/10 hover:text-white"
+                            title="Chat Settings"
+                          >
+                            <Settings2 size={14} />
+                          </button>
+                        </ToolbarMenu>
                       </div>
                     )}
-                    <div className="pointer-events-auto flex shrink-0 items-center gap-1.5 ml-2">
-                      <ToolbarMenu>
-                        <SummaryButton chatId={chat?.id ?? null} summary={chatMeta.summary ?? null} />
-                        <button
-                          onClick={() => setFilesOpen(true)}
-                          className="flex items-center justify-center rounded-full bg-white/5 border border-white/10 p-1.5 text-white/60 backdrop-blur-md transition-all hover:bg-white/10 hover:text-white"
-                          title="Manage Chat Files"
-                        >
-                          <FolderOpen size={14} />
-                        </button>
-                        {expressionAgentEnabled && chatCharIds.length > 0 && (
-                          <button
-                            onClick={handleToggleSpritePosition}
-                            className="flex items-center justify-center rounded-full bg-white/5 border border-white/10 p-1.5 text-white/60 backdrop-blur-md transition-all hover:bg-white/10 hover:text-white"
-                            title={`Sprite: ${spritePosition} side (click to flip)`}
-                          >
-                            <FlipHorizontal2 size={14} />
-                          </button>
-                        )}
-                        <button
-                          onClick={() => setGalleryOpen(true)}
-                          className="flex items-center justify-center rounded-full bg-white/5 border border-white/10 p-1.5 text-white/60 backdrop-blur-md transition-all hover:bg-white/10 hover:text-white"
-                          title="Gallery"
-                        >
-                          <Image size={14} />
-                        </button>
-                        <button
-                          onClick={() => setSettingsOpen(true)}
-                          className="flex items-center justify-center rounded-full bg-white/5 border border-white/10 p-1.5 text-white/60 backdrop-blur-md transition-all hover:bg-white/10 hover:text-white"
-                          title="Chat Settings"
-                        >
-                          <Settings2 size={14} />
-                        </button>
-                      </ToolbarMenu>
-                    </div>
                   </div>
                   {/* Desktop fallback toolbar when agents disabled in left/right mode */}
                   {!chatMeta.enableAgents && (
@@ -948,7 +971,12 @@ export function ChatArea() {
                   </button>
                 </div>
                 <div className="w-8 border-t border-white/10" />
-                <RoleplayHUD chatId={chat.id} characterCount={chatCharIds.length} layout="right" />
+                <RoleplayHUD
+                  chatId={chat.id}
+                  characterCount={chatCharIds.length}
+                  layout="right"
+                  onRetriggerTrackers={handleRerunTrackers}
+                />
               </div>
             )}
           </div>
@@ -1059,6 +1087,7 @@ export function ChatArea() {
                 <AgentsHeaderButton
                   agentConfigs={agentConfigs as AgentConfigRow[] | undefined}
                   variant="conversation"
+                  onRetrigger={handleRerunTrackers}
                 />
               )}
               {failedAgentTypes.length > 0 && (
@@ -1084,7 +1113,12 @@ export function ChatArea() {
           {/* HUD widgets row (when agents enabled) */}
           {chat && chatMeta.enableAgents && (
             <div className="overflow-x-auto border-t border-[var(--border)] px-4 py-1.5">
-              <RoleplayHUD chatId={chat.id} characterCount={chatCharIds.length} layout="top" />
+              <RoleplayHUD
+                chatId={chat.id}
+                characterCount={chatCharIds.length}
+                layout="top"
+                onRetriggerTrackers={handleRerunTrackers}
+              />
             </div>
           )}
         </div>
@@ -1293,9 +1327,11 @@ function QuickStartCard({
 function AgentsHeaderButton({
   agentConfigs,
   variant,
+  onRetrigger,
 }: {
   agentConfigs: AgentConfigRow[] | undefined;
   variant: "roleplay" | "conversation";
+  onRetrigger?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -1447,6 +1483,28 @@ function AgentsHeaderButton({
               </div>
             </>
           )}
+
+          {/* Re-run agents button */}
+          {onRetrigger && (
+            <div className={cn("border-t px-3 py-2", isRP ? "border-white/5" : "border-[var(--border)]")}>
+              <button
+                onClick={() => {
+                  onRetrigger();
+                  setOpen(false);
+                }}
+                disabled={isProcessing}
+                className={cn(
+                  "flex w-full items-center justify-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[10px] font-medium transition-all disabled:opacity-50",
+                  isRP
+                    ? "bg-purple-500/20 text-purple-300 hover:bg-purple-500/30"
+                    : "bg-purple-500/10 text-purple-500 hover:bg-purple-500/20",
+                )}
+              >
+                <RefreshCw size={11} className={isProcessing ? "animate-spin" : ""} />
+                {isProcessing ? "Running…" : "Re-run Trackers"}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1483,7 +1541,7 @@ function ToolbarMenu({
       {/* Desktop: show children inline */}
       <div className="hidden md:flex items-center gap-1.5">{children}</div>
       {/* Mobile: show ... button + popover */}
-      <div className="relative md:hidden" ref={ref}>
+      <div className="relative md:hidden shrink-0 ml-1" ref={ref}>
         <button
           onClick={() => setOpen(!open)}
           className={cn(

@@ -81,7 +81,16 @@ export function ChatFilesDrawer({ chat, open, onClose }: ChatFilesDrawerProps) {
               disabled={exportChat.isPending}
               className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-[var(--secondary)] px-3 py-2.5 text-xs font-medium text-[var(--foreground)] ring-1 ring-[var(--border)] transition-all hover:bg-[var(--accent)] active:scale-[0.98] disabled:opacity-50"
             >
-              <Download size={13} />
+              <svg width="13" height="13" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path
+                  d="M10 13V3m0 0l-4 4m4-4l4 4"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <rect x="3" y="15" width="14" height="2" rx="1" fill="currentColor" />
+              </svg>
               Export Chat
             </button>
           </div>
@@ -130,7 +139,16 @@ export function ChatFilesDrawer({ chat, open, onClose }: ChatFilesDrawerProps) {
             disabled={exportChat.isPending}
             className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl bg-[var(--secondary)] px-3 py-2.5 text-xs font-medium text-[var(--foreground)] ring-1 ring-[var(--border)] transition-all hover:bg-[var(--accent)] active:scale-[0.98] disabled:opacity-50"
           >
-            <Download size={13} />
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M10 13V3m0 0l-4 4m4-4l4 4"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <rect x="3" y="15" width="14" height="2" rx="1" fill="currentColor" />
+            </svg>
             Export Chat
           </button>
           <p className="mt-2 text-center text-[10px] text-[var(--muted-foreground)]/60">

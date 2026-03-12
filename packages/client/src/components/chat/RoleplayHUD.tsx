@@ -26,6 +26,7 @@ import {
   Plus,
   MessageCircle,
   Swords,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { api } from "../../lib/api-client";
@@ -40,9 +41,16 @@ interface RoleplayHUDProps {
   chatId: string;
   characterCount: number;
   layout?: HudPosition;
+  onRetriggerTrackers?: () => void;
 }
 
-export function RoleplayHUD({ chatId, characterCount, layout = "top" }: RoleplayHUDProps) {
+export function RoleplayHUD({
+  chatId,
+  characterCount,
+  layout = "top",
+  onRetriggerTrackers,
+  mobileCompact,
+}: RoleplayHUDProps & { mobileCompact?: boolean }) {
   const [agentsOpen, setAgentsOpen] = useState(false);
   const gameState = useGameStateStore((s) => s.current);
   const setGameState = useGameStateStore((s) => s.setGameState);
@@ -183,9 +191,16 @@ export function RoleplayHUD({ chatId, characterCount, layout = "top" }: Roleplay
   const activeQuests = playerStats?.activeQuests ?? [];
 
   const isVertical = layout === "left" || layout === "right";
+  // If mobileCompact, widgets are even narrower and action buttons are not cut off
 
   return (
-    <div className={cn("rpg-hud", isVertical ? "flex flex-col items-center gap-1.5" : "flex items-center gap-1.5")}>
+    <div
+      className={cn(
+        "rpg-hud",
+        isVertical ? "flex flex-col items-center gap-1.5" : "flex items-center gap-1.5",
+        mobileCompact ? "flex-1 min-w-0 overflow-hidden flex-nowrap gap-0.5 pr-2" : "max-md:ml-2",
+      )}
+    >
       {/* Actions (Agents + Clear) */}
       <ActionsGroup
         isVertical={isVertical}
@@ -197,16 +212,21 @@ export function RoleplayHUD({ chatId, characterCount, layout = "top" }: Roleplay
         dismissThoughtBubble={dismissThoughtBubble}
         enabledAgentTypes={enabledAgentTypes}
         clearGameState={clearGameState}
+        onRetriggerTrackers={onRetriggerTrackers}
       />
 
       {/* World State */}
       {enabledAgentTypes.has("world-state") && (
         <>
-          <LocationWidget value={location ?? ""} onSave={(v) => patchField("location", v)} />
-          <CalendarWidget value={date ?? ""} onSave={(v) => patchField("date", v)} />
-          <ClockWidget value={time ?? ""} onSave={(v) => patchField("time", v)} />
-          <WeatherWidget value={weather ?? ""} onSave={(v) => patchField("weather", v)} />
-          <TemperatureWidget value={temperature ?? ""} onSave={(v) => patchField("temperature", v)} />
+          <LocationWidget value={location ?? ""} onSave={(v) => patchField("location", v)} className="world-widget" />
+          <CalendarWidget value={date ?? ""} onSave={(v) => patchField("date", v)} className="world-widget" />
+          <ClockWidget value={time ?? ""} onSave={(v) => patchField("time", v)} className="world-widget" />
+          <WeatherWidget value={weather ?? ""} onSave={(v) => patchField("weather", v)} className="world-widget" />
+          <TemperatureWidget
+            value={temperature ?? ""}
+            onSave={(v) => patchField("temperature", v)}
+            className="world-widget"
+          />
         </>
       )}
 
@@ -214,7 +234,7 @@ export function RoleplayHUD({ chatId, characterCount, layout = "top" }: Roleplay
       {(enabledAgentTypes.has("persona-stats") ||
         enabledAgentTypes.has("character-tracker") ||
         enabledAgentTypes.has("quest")) && (
-        <div className="md:hidden">
+        <div className={cn("md:hidden", mobileCompact && "world-widget")}>
           <CombinedPlayerWidget
             layout={layout}
             showPersona={enabledAgentTypes.has("persona-stats")}
@@ -293,6 +313,7 @@ interface ActionsGroupProps {
   dismissThoughtBubble: (i: number) => void;
   enabledAgentTypes: Set<string>;
   clearGameState: () => void;
+  onRetriggerTrackers?: () => void;
 }
 
 function ActionsGroup({
@@ -305,6 +326,7 @@ function ActionsGroup({
   dismissThoughtBubble,
   enabledAgentTypes,
   clearGameState,
+  onRetriggerTrackers,
 }: ActionsGroupProps) {
   const btnRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -339,7 +361,7 @@ function ActionsGroup({
   }, [agentsOpen, setAgentsOpen]);
 
   return (
-    <div className={cn("flex gap-1.5", isVertical ? "flex-col items-center" : "items-center max-md:flex-col")}>
+    <div className={cn("flex shrink-0 gap-1.5", isVertical ? "flex-col items-center" : "items-center max-md:flex-col")}>
       {/* Agents */}
       <div className="relative">
         <button
@@ -415,6 +437,21 @@ function ActionsGroup({
                   </div>
                 </>
               )}
+              {onRetriggerTrackers && (
+                <div className="border-t border-white/5 px-3 py-2">
+                  <button
+                    onClick={() => {
+                      onRetriggerTrackers();
+                      setAgentsOpen(false);
+                    }}
+                    disabled={isAgentProcessing}
+                    className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-purple-500/20 px-2.5 py-1.5 text-[10px] font-medium text-purple-300 transition-all hover:bg-purple-500/30 disabled:opacity-50"
+                  >
+                    <RefreshCw size={11} className={isAgentProcessing ? "animate-spin" : ""} />
+                    {isAgentProcessing ? "Running\u2026" : "Re-run Trackers"}
+                  </button>
+                </div>
+              )}
             </div>,
             document.body,
           )}
@@ -448,12 +485,13 @@ function EchoChamberToggle() {
       onClick={toggleEchoChamber}
       className={cn(
         "flex items-center gap-1 rounded-full bg-white/5 border border-white/10 px-2 py-1 text-[10px] text-white/60 backdrop-blur-md transition-all hover:bg-white/10 hover:text-white",
+        "max-md:px-1.5 max-md:py-0.5 max-md:text-[9px]",
         echoChamberOpen && "bg-purple-500/20 text-purple-300 border-purple-500/30",
       )}
       title="Toggle Echo Chamber panel"
     >
-      <MessageCircle size={10} className="text-purple-400/70" />
-      <span>Echo</span>
+      <MessageCircle size={10} className="text-purple-400/70 max-md:h-3 max-md:w-3" />
+      <span className="max-md:text-[9px]">Echo</span>
       {echoMessages.length > 0 && (
         <span className="flex h-3.5 min-w-[0.875rem] items-center justify-center rounded-full bg-purple-500/80 px-1 text-[8px] font-bold text-white">
           {echoMessages.length}
@@ -904,6 +942,10 @@ function InlineEdit({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const ref = useRef<HTMLInputElement>(null);
+  const lastTapRef = useRef(0);
+  const isTouchRef = useRef(false);
+  const [showTip, setShowTip] = useState(false);
+  const tipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (editing) ref.current?.focus();
@@ -914,6 +956,31 @@ function InlineEdit({
     if (t !== value) onSave(t);
     setEditing(false);
   };
+
+  const handleTouchStart = useCallback(() => {
+    isTouchRef.current = true;
+  }, []);
+
+  const handleClick = useCallback(() => {
+    if (!isTouchRef.current) {
+      setDraft(value);
+      setEditing(true);
+      return;
+    }
+    isTouchRef.current = false;
+    const now = Date.now();
+    if (now - lastTapRef.current < 350) {
+      setShowTip(false);
+      if (tipTimerRef.current) clearTimeout(tipTimerRef.current);
+      setDraft(value);
+      setEditing(true);
+    } else {
+      setShowTip(true);
+      if (tipTimerRef.current) clearTimeout(tipTimerRef.current);
+      tipTimerRef.current = setTimeout(() => setShowTip(false), 2500);
+    }
+    lastTapRef.current = now;
+  }, [value]);
 
   if (editing) {
     return (
@@ -937,12 +1004,11 @@ function InlineEdit({
 
   return (
     <button
-      onClick={() => {
-        setDraft(value);
-        setEditing(true);
-      }}
+      onClick={handleClick}
+      onTouchStart={handleTouchStart}
+      title={value || undefined}
       className={cn(
-        "group flex items-center gap-1 text-left hover:bg-white/5 rounded px-0.5 transition-colors",
+        "group relative flex items-center gap-1 text-left hover:bg-white/5 rounded px-0.5 transition-colors",
         className,
       )}
     >
@@ -950,6 +1016,11 @@ function InlineEdit({
         {value || <span className="italic text-white/25">{placeholder ?? "—"}</span>}
       </span>
       <Pencil size={7} className="opacity-0 group-hover:opacity-40 shrink-0 transition-opacity" />
+      {showTip && value && (
+        <span className="absolute bottom-full left-0 mb-1 max-w-[12rem] break-words rounded bg-black/90 border border-white/10 px-1.5 py-1 text-[9px] text-white/80 z-[9999] pointer-events-none animate-message-in whitespace-normal">
+          {value}
+        </span>
+      )}
     </button>
   );
 }
@@ -1504,7 +1575,10 @@ function QuestCardEditable({
                   <Circle size={8} className="text-white/20 shrink-0" />
                 )}
               </button>
-              <span className={cn("flex-1 truncate", obj.completed ? "text-white/30 line-through" : "text-white/50")}>
+              <span
+                className={cn("flex-1 truncate", obj.completed ? "text-white/30 line-through" : "text-white/50")}
+                title={obj.text}
+              >
                 {obj.text}
               </span>
               <button
@@ -1543,7 +1617,7 @@ function LabeledEdit({ label, value, onSave }: { label: string; value: string; o
 // ═══════════════════════════════════════════════
 
 const WIDGET =
-  "group flex w-20 h-[3.75rem] max-md:w-11 max-md:h-8 flex-col items-center justify-center gap-0.5 max-md:gap-0 rounded-xl max-md:rounded-lg border bg-black/40 backdrop-blur-md transition-all hover:bg-black/60 cursor-pointer select-none";
+  "group flex w-20 h-[3.75rem] max-md:w-12 max-md:h-9 flex-col items-center justify-center gap-0.5 max-md:gap-0 rounded-xl max-md:rounded-lg border bg-black/40 backdrop-blur-md transition-all hover:bg-black/60 cursor-pointer select-none";
 const WIDGET_EDIT =
   "flex w-20 h-[3.75rem] max-md:w-11 max-md:h-8 flex-col items-center justify-center gap-0.5 max-md:gap-0 rounded-xl max-md:rounded-lg border bg-black/60 backdrop-blur-md";
 
@@ -1652,7 +1726,15 @@ function WidgetInput({
 
 // ── Location Widget ──────────────────────────
 
-function LocationWidget({ value, onSave }: { value: string; onSave: (v: string) => void }) {
+function LocationWidget({
+  value,
+  onSave,
+  className,
+}: {
+  value: string;
+  onSave: (v: string) => void;
+  className?: string;
+}) {
   const [editing, setEditing] = useState(false);
   const { showTip, handleClick, handleTouchStart } = useWidgetTap(() => setEditing(true));
 
@@ -1669,10 +1751,10 @@ function LocationWidget({ value, onSave }: { value: string; onSave: (v: string) 
     <button
       onClick={handleClick}
       onTouchStart={handleTouchStart}
-      className={cn(WIDGET, "border-emerald-500/20 text-emerald-300", showTip && "z-50")}
+      className={cn(WIDGET, "border-emerald-500/20 text-emerald-300", showTip && "z-50", className)}
       title={value || "Click to edit location"}
     >
-      <div className="relative flex h-7 max-md:h-4 w-14 max-md:w-8 items-center justify-center shrink-0">
+      <div className="relative flex h-7 max-md:h-4 items-center justify-center shrink-0">
         <div className="absolute inset-0 rounded-md overflow-hidden opacity-40">
           <div className="absolute inset-0 bg-gradient-to-br from-emerald-900/60 via-emerald-800/40 to-emerald-950/60" />
           <svg className="absolute inset-0 w-full h-full" viewBox="0 0 56 28">
@@ -1744,7 +1826,15 @@ function LocationWidget({ value, onSave }: { value: string; onSave: (v: string) 
 
 // ── Calendar Widget ──────────────────────────
 
-function CalendarWidget({ value, onSave }: { value: string; onSave: (v: string) => void }) {
+function CalendarWidget({
+  value,
+  onSave,
+  className,
+}: {
+  value: string;
+  onSave: (v: string) => void;
+  className?: string;
+}) {
   const [editing, setEditing] = useState(false);
   const { showTip, handleClick, handleTouchStart } = useWidgetTap(() => setEditing(true));
   const { day, month } = value ? parseDateLabel(value) : { day: null, month: null };
@@ -1762,10 +1852,10 @@ function CalendarWidget({ value, onSave }: { value: string; onSave: (v: string) 
     <button
       onClick={handleClick}
       onTouchStart={handleTouchStart}
-      className={cn(WIDGET, "border-violet-500/20 text-violet-300", showTip && "z-50")}
+      className={cn(WIDGET, "border-violet-500/20 text-violet-300", showTip && "z-50", className)}
       title={value || "Click to edit date"}
     >
-      <div className="flex h-7 max-md:h-4 w-8 max-md:w-5 flex-col rounded-sm border border-violet-400/30 overflow-hidden bg-violet-950/30 shrink-0">
+      <div className="flex h-7 max-md:h-4 flex-col rounded-sm border border-violet-400/30 overflow-hidden bg-violet-950/30 shrink-0">
         <div className="flex h-2.5 max-md:h-1.5 items-center justify-center bg-violet-500/25">
           <span className="text-[5px] max-md:text-[3px] font-bold uppercase tracking-wider text-violet-300/80">
             {month || "———"}
@@ -1782,7 +1872,7 @@ function CalendarWidget({ value, onSave }: { value: string; onSave: (v: string) 
 
 // ── Clock Widget ─────────────────────────────
 
-function ClockWidget({ value, onSave }: { value: string; onSave: (v: string) => void }) {
+function ClockWidget({ value, onSave, className }: { value: string; onSave: (v: string) => void; className?: string }) {
   const [editing, setEditing] = useState(false);
   const { showTip, handleClick, handleTouchStart } = useWidgetTap(() => setEditing(true));
   const hour = value ? extractHourFromTime(value) : -1;
@@ -1804,10 +1894,10 @@ function ClockWidget({ value, onSave }: { value: string; onSave: (v: string) => 
     <button
       onClick={handleClick}
       onTouchStart={handleTouchStart}
-      className={cn(WIDGET, "border-amber-500/20 text-amber-300", showTip && "z-50")}
+      className={cn(WIDGET, "border-amber-500/20 text-amber-300", showTip && "z-50", className)}
       title={value || "Click to edit time"}
     >
-      <div className="relative flex h-7 max-md:h-4 w-7 max-md:w-4 items-center justify-center shrink-0">
+      <div className="relative flex h-7 max-md:h-4 items-center justify-center shrink-0">
         <svg viewBox="0 0 32 32" className="h-full w-full">
           <circle
             cx="16"
@@ -1868,7 +1958,15 @@ function ClockWidget({ value, onSave }: { value: string; onSave: (v: string) => 
 
 // ── Weather Widget ───────────────────────────
 
-function WeatherWidget({ value, onSave }: { value: string; onSave: (v: string) => void }) {
+function WeatherWidget({
+  value,
+  onSave,
+  className,
+}: {
+  value: string;
+  onSave: (v: string) => void;
+  className?: string;
+}) {
   const [editing, setEditing] = useState(false);
   const { showTip, handleClick, handleTouchStart } = useWidgetTap(() => setEditing(true));
   const emoji = value ? getWeatherEmoji(value) : "🌤️";
@@ -1886,7 +1984,7 @@ function WeatherWidget({ value, onSave }: { value: string; onSave: (v: string) =
     <button
       onClick={handleClick}
       onTouchStart={handleTouchStart}
-      className={cn(WIDGET, "border-sky-500/20 text-sky-300", showTip && "z-50")}
+      className={cn(WIDGET, "border-sky-500/20 text-sky-300", showTip && "z-50", className)}
       title={value || "Click to edit weather"}
     >
       <div className="flex h-7 max-md:h-4 items-center justify-center shrink-0">
@@ -1899,7 +1997,15 @@ function WeatherWidget({ value, onSave }: { value: string; onSave: (v: string) =
 
 // ── Temperature Widget ───────────────────────
 
-function TemperatureWidget({ value, onSave }: { value: string; onSave: (v: string) => void }) {
+function TemperatureWidget({
+  value,
+  onSave,
+  className,
+}: {
+  value: string;
+  onSave: (v: string) => void;
+  className?: string;
+}) {
   const [editing, setEditing] = useState(false);
   const { showTip, handleClick, handleTouchStart } = useWidgetTap(() => setEditing(true));
   const temp = value ? parseTemperature(value) : null;
@@ -1928,7 +2034,7 @@ function TemperatureWidget({ value, onSave }: { value: string; onSave: (v: strin
     <button
       onClick={handleClick}
       onTouchStart={handleTouchStart}
-      className={cn(WIDGET, "border-rose-500/20 text-rose-300", showTip && "z-50")}
+      className={cn(WIDGET, "border-rose-500/20 text-rose-300", showTip && "z-50", className)}
       title={value || "Click to edit temperature"}
     >
       <div className="relative flex h-7 max-md:h-4 items-center justify-center shrink-0">

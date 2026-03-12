@@ -3,7 +3,7 @@
 // ──────────────────────────────────────────────
 import { useState, useRef } from "react";
 import { Modal } from "../ui/Modal";
-import { Upload, FileJson, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { Download, FileJson, CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
 interface Props {
@@ -85,7 +85,7 @@ export function ImportLorebookModal({ open, onClose }: Props) {
               : "border-[var(--border)] hover:border-[var(--muted-foreground)] hover:bg-[var(--secondary)]/50"
           }`}
         >
-          <Upload size={32} className={dragOver ? "text-[var(--primary)]" : "text-[var(--muted-foreground)]"} />
+          <Download size={32} className={dragOver ? "text-[var(--primary)]" : "text-[var(--muted-foreground)]"} />
           <p className="text-sm font-medium">Drop lorebook JSON here or click to browse</p>
           <span className="flex items-center gap-1 rounded-full bg-[var(--secondary)] px-2.5 py-1 text-xs text-[var(--muted-foreground)]">
             <FileJson size={12} /> .json

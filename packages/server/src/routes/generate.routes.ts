@@ -10,7 +10,15 @@ import {
   nameToXmlTag,
   DEFAULT_AGENT_TOOLS,
 } from "@marinara-engine/shared";
-import type { AgentContext, AgentResult, AgentPhase, APIProvider, CharacterStat, GameState, PlayerStats } from "@marinara-engine/shared";
+import type {
+  AgentContext,
+  AgentResult,
+  AgentPhase,
+  APIProvider,
+  CharacterStat,
+  GameState,
+  PlayerStats,
+} from "@marinara-engine/shared";
 import { createChatsStorage } from "../services/storage/chats.storage.js";
 import { createConnectionsStorage } from "../services/storage/connections.storage.js";
 import { createPromptsStorage } from "../services/storage/prompts.storage.js";
@@ -1283,6 +1291,15 @@ export async function generateRoutes(app: FastifyInstance) {
         return { savedMsg, response: fullResponse };
       };
 
+      // ────────────────────────────────────────
+      // Phase 2: Fire parallel agents alongside the main generation
+      // ────────────────────────────────────────
+      const hasParallelAgents = pipelineAgents.some((a) => a.phase === "parallel");
+      let parallelPromise: Promise<AgentResult[]> | null = null;
+      if (hasParallelAgents && !abortController.signal.aborted) {
+        parallelPromise = pipeline.runParallel();
+      }
+
       // ── Run generation ──
       let lastSavedMsg: any = null;
 
@@ -1322,14 +1339,27 @@ export async function generateRoutes(app: FastifyInstance) {
       }
 
       // ────────────────────────────────────────
-      // Phase 2+3: Post-processing & parallel agents
+      // Collect parallel results + Phase 3: Post-processing agents
       // ────────────────────────────────────────
-      const hasPostAgents = resolvedAgents.some((a) => a.phase === "post_processing" || a.phase === "parallel");
+      // Await parallel agents that were started alongside the generation
+      let parallelResults: AgentResult[] = [];
+      if (parallelPromise) {
+        try {
+          parallelResults = await parallelPromise;
+        } catch {
+          // Non-critical — parallel agents may fail independently
+        }
+      }
+
+      const hasPostProcessingAgents = resolvedAgents.some((a) => a.phase === "post_processing");
       const combinedResponse = allResponses.join("\n\n");
-      if (hasPostAgents && combinedResponse && !abortController.signal.aborted) {
+      const hasPostWork = hasPostProcessingAgents || parallelResults.length > 0;
+      if (hasPostWork && combinedResponse && !abortController.signal.aborted) {
         reply.raw.write(`data: ${JSON.stringify({ type: "agent_start", data: { phase: "post_generation" } })}\n\n`);
 
-        let postResults = await pipeline.postGenerate(combinedResponse);
+        let postResults = hasPostProcessingAgents
+          ? [...(await pipeline.postGenerate(combinedResponse)), ...parallelResults]
+          : [...parallelResults];
 
         // ── Auto-retry failed agents once ──
         const failedResults = postResults.filter((r) => !r.success);
@@ -1368,8 +1398,14 @@ export async function generateRoutes(app: FastifyInstance) {
         }
 
         // Persist agent runs to DB + handle game state updates
+        // Sort so game_state_update (world-state) is processed before dependent types
+        // (character_tracker_update, persona_stats_update) that merge into the snapshot.
+        const RESULT_ORDER: Record<string, number> = { game_state_update: 0 };
+        const sortedResults = [...postResults].sort(
+          (a, b) => (RESULT_ORDER[a.type] ?? 1) - (RESULT_ORDER[b.type] ?? 1),
+        );
         const messageId = (lastSavedMsg as any)?.id ?? "";
-        for (const result of postResults) {
+        for (const result of sortedResults) {
           try {
             await agentsStore.saveRun({
               agentConfigId: result.agentId,
@@ -1418,7 +1454,13 @@ export async function generateRoutes(app: FastifyInstance) {
                   temperature: newTemperature,
                   presentCharacters: (gs.presentCharacters as any[]) ?? [],
                   recentEvents: (gs.recentEvents as string[]) ?? [],
-                  playerStats: (gs.playerStats as PlayerStats | null) ?? (prevSnap?.playerStats ? (typeof prevSnap.playerStats === "string" ? JSON.parse(prevSnap.playerStats) : prevSnap.playerStats) : null),
+                  playerStats:
+                    (gs.playerStats as PlayerStats | null) ??
+                    (prevSnap?.playerStats
+                      ? typeof prevSnap.playerStats === "string"
+                        ? JSON.parse(prevSnap.playerStats)
+                        : prevSnap.playerStats
+                      : null),
                   personaStats: (gs.personaStats as CharacterStat[] | null) ?? null,
                 },
                 manualOverrides,
@@ -1505,6 +1547,56 @@ export async function generateRoutes(app: FastifyInstance) {
             }
           }
 
+          // Quest Tracker agent → merge quest updates into playerStats.activeQuests
+          if (result.success && result.type === "quest_update" && result.data && typeof result.data === "object") {
+            try {
+              const qData = result.data as Record<string, unknown>;
+              const updates = (qData.updates as any[]) ?? [];
+              if (updates.length > 0) {
+                const latest = await gameStateStore.getLatest(input.chatId);
+                const existingPS = latest?.playerStats
+                  ? typeof latest.playerStats === "string"
+                    ? JSON.parse(latest.playerStats)
+                    : latest.playerStats
+                  : { stats: [], attributes: null, skills: {}, inventory: [], activeQuests: [], status: "" };
+                const quests: any[] = [...(existingPS.activeQuests ?? [])];
+                for (const u of updates) {
+                  const idx = quests.findIndex((q: any) => q.name === u.questName);
+                  if (u.action === "create" && idx === -1) {
+                    quests.push({
+                      questEntryId: u.questName,
+                      name: u.questName,
+                      currentStage: 0,
+                      objectives: u.objectives ?? [],
+                      completed: false,
+                    });
+                  } else if (idx !== -1) {
+                    if (u.action === "update") {
+                      if (u.objectives) quests[idx].objectives = u.objectives;
+                    } else if (u.action === "complete") {
+                      quests[idx].completed = true;
+                      if (u.objectives) quests[idx].objectives = u.objectives;
+                    } else if (u.action === "fail") {
+                      quests.splice(idx, 1);
+                    }
+                  }
+                }
+                const mergedPS = { ...existingPS, activeQuests: quests };
+                if (latest) {
+                  await app.db
+                    .update(gameStateSnapshotsTable)
+                    .set({ playerStats: JSON.stringify(mergedPS) })
+                    .where(eq(gameStateSnapshotsTable.id, latest.id));
+                }
+                reply.raw.write(
+                  `data: ${JSON.stringify({ type: "game_state_patch", data: { playerStats: { activeQuests: quests } } })}\n\n`,
+                );
+              }
+            } catch {
+              // Non-critical
+            }
+          }
+
           // Chat Summary agent → persist rolling summary to chat metadata
           if (result.success && result.type === "chat_summary" && result.data && typeof result.data === "object") {
             try {
@@ -1583,7 +1675,12 @@ export async function generateRoutes(app: FastifyInstance) {
       // Signal completion
       reply.raw.write(`data: ${JSON.stringify({ type: "done", data: "" })}\n\n`);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Generation failed";
+      const message =
+        err instanceof Error
+          ? (err as { cause?: unknown }).cause instanceof Error
+            ? `${err.message}: ${(err as { cause?: Error }).cause!.message}`
+            : err.message
+          : "Generation failed";
       reply.raw.write(`data: ${JSON.stringify({ type: "error", data: message })}\n\n`);
     } finally {
       req.raw.off("close", onClose);
@@ -1765,7 +1862,11 @@ export async function generateRoutes(app: FastifyInstance) {
       }
 
       // Handle game state updates from retry results
-      for (const result of results) {
+      // Sort so game_state_update is processed before dependent types
+      const sortedRetryResults = [...results].sort(
+        (a, b) => (a.type === "game_state_update" ? 0 : 1) - (b.type === "game_state_update" ? 0 : 1),
+      );
+      for (const result of sortedRetryResults) {
         if (result.success && result.type === "game_state_update" && result.data && typeof result.data === "object") {
           try {
             const gs = result.data as Record<string, unknown>;
@@ -1792,11 +1893,106 @@ export async function generateRoutes(app: FastifyInstance) {
             /* Non-critical */
           }
         }
+        if (
+          result.success &&
+          result.type === "persona_stats_update" &&
+          result.data &&
+          typeof result.data === "object"
+        ) {
+          try {
+            const psData = result.data as Record<string, unknown>;
+            const bars = (psData.stats as any[]) ?? [];
+            const status = (psData.status as string) ?? "";
+            const inventory = (psData.inventory as any[]) ?? [];
+            const latest = await gameStateStore.getLatest(chatId);
+            if (latest) {
+              const updates: Record<string, unknown> = {};
+              if (bars.length > 0) updates.personaStats = JSON.stringify(bars);
+              const existingPS = latest.playerStats
+                ? typeof latest.playerStats === "string"
+                  ? JSON.parse(latest.playerStats)
+                  : latest.playerStats
+                : { stats: [], attributes: null, skills: {}, inventory: [], activeQuests: [], status: "" };
+              const mergedPS = { ...existingPS };
+              if (status) mergedPS.status = status;
+              if (inventory.length > 0) mergedPS.inventory = inventory;
+              updates.playerStats = JSON.stringify(mergedPS);
+              await app.db
+                .update(gameStateSnapshotsTable)
+                .set(updates)
+                .where(eq(gameStateSnapshotsTable.id, latest.id));
+            }
+            const patchData: Record<string, unknown> = {};
+            if (bars.length > 0) patchData.personaStats = bars;
+            if (status || inventory.length > 0) {
+              patchData.playerStats = {
+                status: status || undefined,
+                inventory: inventory.length > 0 ? inventory : undefined,
+              };
+            }
+            reply.raw.write(`data: ${JSON.stringify({ type: "game_state_patch", data: patchData })}\n\n`);
+          } catch {
+            /* Non-critical */
+          }
+        }
+        if (result.success && result.type === "quest_update" && result.data && typeof result.data === "object") {
+          try {
+            const qData = result.data as Record<string, unknown>;
+            const updates = (qData.updates as any[]) ?? [];
+            if (updates.length > 0) {
+              const latest = await gameStateStore.getLatest(chatId);
+              const existingPS = latest?.playerStats
+                ? typeof latest.playerStats === "string"
+                  ? JSON.parse(latest.playerStats)
+                  : latest.playerStats
+                : { stats: [], attributes: null, skills: {}, inventory: [], activeQuests: [], status: "" };
+              const quests: any[] = [...(existingPS.activeQuests ?? [])];
+              for (const u of updates) {
+                const idx = quests.findIndex((q: any) => q.name === u.questName);
+                if (u.action === "create" && idx === -1) {
+                  quests.push({
+                    questEntryId: u.questName,
+                    name: u.questName,
+                    currentStage: 0,
+                    objectives: u.objectives ?? [],
+                    completed: false,
+                  });
+                } else if (idx !== -1) {
+                  if (u.action === "update") {
+                    if (u.objectives) quests[idx].objectives = u.objectives;
+                  } else if (u.action === "complete") {
+                    quests[idx].completed = true;
+                    if (u.objectives) quests[idx].objectives = u.objectives;
+                  } else if (u.action === "fail") {
+                    quests.splice(idx, 1);
+                  }
+                }
+              }
+              const mergedPS = { ...existingPS, activeQuests: quests };
+              if (latest) {
+                await app.db
+                  .update(gameStateSnapshotsTable)
+                  .set({ playerStats: JSON.stringify(mergedPS) })
+                  .where(eq(gameStateSnapshotsTable.id, latest.id));
+              }
+              reply.raw.write(
+                `data: ${JSON.stringify({ type: "game_state_patch", data: { playerStats: { activeQuests: quests } } })}\n\n`,
+              );
+            }
+          } catch {
+            /* Non-critical */
+          }
+        }
       }
 
       reply.raw.write(`data: ${JSON.stringify({ type: "done", data: "" })}\n\n`);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Agent retry failed";
+      const message =
+        err instanceof Error
+          ? (err as { cause?: unknown }).cause instanceof Error
+            ? `${err.message}: ${(err as { cause?: Error }).cause!.message}`
+            : err.message
+          : "Agent retry failed";
       reply.raw.write(`data: ${JSON.stringify({ type: "error", data: message })}\n\n`);
     } finally {
       reply.raw.end();

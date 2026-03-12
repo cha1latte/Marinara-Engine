@@ -91,7 +91,15 @@ export const api = {
     });
 
     if (!res.ok || !res.body) {
-      throw new ApiError(res.status, "Stream failed");
+      let detail = `HTTP ${res.status}`;
+      try {
+        const text = await res.text();
+        const json = JSON.parse(text);
+        detail = json.error || json.message || text.slice(0, 200);
+      } catch {
+        /* couldn't parse body */
+      }
+      throw new ApiError(res.status, detail);
     }
 
     const reader = res.body.getReader();
@@ -141,7 +149,15 @@ export const api = {
     });
 
     if (!res.ok || !res.body) {
-      throw new ApiError(res.status, "Stream failed");
+      let detail = `HTTP ${res.status}`;
+      try {
+        const text = await res.text();
+        const json = JSON.parse(text);
+        detail = json.error || json.message || text.slice(0, 200);
+      } catch {
+        /* couldn't parse body */
+      }
+      throw new ApiError(res.status, detail);
     }
 
     const reader = res.body.getReader();

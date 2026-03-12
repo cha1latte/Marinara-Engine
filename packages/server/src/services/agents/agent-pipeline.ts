@@ -3,8 +3,8 @@
 // ──────────────────────────────────────────────
 // Coordinates the 3 agent phases around the main generation:
 //   1. pre_generation  → inject context before the LLM call
-//   2. parallel        → fire alongside (after) the main generation
-//   3. post_processing → analyze/modify the completed response
+//   2. parallel        → fire alongside the main generation (no mainResponse)
+//   3. post_processing → analyze/modify the completed response (has mainResponse)
 //
 // Agents that share the same provider+model are BATCHED into a
 // single LLM call to reduce total requests. Agents with different
@@ -198,8 +198,9 @@ export interface AgentPipelineResult {
 
 /**
  * Run ALL enabled agents across the full pipeline.
- * Call `runPreGeneration` before generating, then call `runPostAndParallel`
- * after the response is complete, passing the final response text.
+ * Call `runPreGeneration` before generating, fire `runParallel` concurrently
+ * with the main generation, then call `postGenerate` after the response is
+ * complete, passing the final response text.
  *
  * Within each phase, agents that share the same provider+model are
  * batched into a single LLM call.
@@ -226,7 +227,16 @@ export function createAgentPipeline(
     },
 
     /**
-     * Phase 2 + 3: Run post-processing and parallel agents concurrently.
+     * Phase 2: Run parallel agents alongside the main generation.
+     * Called concurrently with the main LLM call — agents use the
+     * base context without mainResponse (since it doesn't exist yet).
+     */
+    async runParallel(): Promise<AgentResult[]> {
+      return runParallelAgents(agents, baseContext, wrappedOnResult);
+    },
+
+    /**
+     * Phase 3: Run post-processing agents after the main response.
      * Must be called after the main response is available.
      */
     async postGenerate(mainResponse: string): Promise<AgentResult[]> {
@@ -235,12 +245,7 @@ export function createAgentPipeline(
         mainResponse,
       };
 
-      const [postResults, parallelResults] = await Promise.all([
-        runPostProcessingAgents(agents, fullContext, wrappedOnResult),
-        runParallelAgents(agents, fullContext, wrappedOnResult),
-      ]);
-
-      return [...postResults, ...parallelResults];
+      return runPostProcessingAgents(agents, fullContext, wrappedOnResult);
     },
 
     /** All results collected so far. */

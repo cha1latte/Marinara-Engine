@@ -1,6 +1,6 @@
 # 🍝 Marinara Engine
 
-### Release 1.3.0
+### Release 1.3.1
 
 <h3 align="center"><b>Fun. Intuitive. Plug-And-Play.</b></h3>
 
@@ -65,6 +65,30 @@ Everything runs locally. No accounts, no cloud, no telemetry. Connect to any Ope
 ---
 
 ## Changelog
+
+### v1.3.1
+
+**Added:**
+- Bulk import for regex scripts via JSON in the Agents panel.
+- Regex Scripts section moved to the top of the Agents tab for easier access.
+
+**Changes:**
+- Import icons now use a downward-arrow-into-box icon; export icons use an upward-arrow-from-box icon for clearer visual distinction.
+- Mobile HUD widgets are now evenly distributed using flex layout with proper spacing from the toolbar menu.
+- Echo Chamber panel on mobile now dynamically positions below the HUD bar instead of using a hardcoded offset.
+
+**Fixes:**
+- Fixed mobile world state widgets being too wide and overlapping action buttons.
+- Fixed Echo Chamber window overlaying HUD widgets on mobile.
+- Fixed desktop world state widgets being constrained to incorrect max-width.
+- Fixed mobile tracker widget overlapping/touching the three-dots toolbar menu button.
+- Fixed SQLite `IOERR_WRITE` errors caused by macOS iCloud `fileproviderd` interfering with WAL files (added `busy_timeout`, `.nosync` marker).
+- Fixed `getDB()` race condition where concurrent calls could create duplicate database connections.
+- Fixed `busy_timeout` PRAGMA missing from the `better-sqlite3` driver path.
+- Fixed regex script import not normalizing `placement` field type (array vs string).
+- Fixed CSS `@import` ordering violation in globals.css (custom rules appeared before `@import "tailwindcss"`).
+- Removed orphaned `.rpg-hud-actions` CSS selector.
+- Cleaned up inline styles and stale comments across components.
 
 ### v1.3.0
 
@@ -176,7 +200,7 @@ All agents are disabled by default — enable only the ones you want. You can al
 ## Installation
 
 ## Windows EASIEST METHOD
-Download **[Marinara-Engine-Installer-1.3.0.exe](https://github.com/SpicyMarinara/Marinara-Engine/releases/download/v1.3.0/Marinara-Engine-Installer-1.3.0.exe)** from the [Releases](https://github.com/SpicyMarinara/Marinara-Engine/releases) page and run it. The installer checks for Node.js and Git, clones the repo, installs dependencies, builds the app, and creates a desktop shortcut.
+Download **[Marinara-Engine-Installer-1.3.1.exe](https://github.com/SpicyMarinara/Marinara-Engine/releases/download/v1.3.1/Marinara-Engine-Installer-1.3.1.exe)** from the [Releases](https://github.com/SpicyMarinara/Marinara-Engine/releases) page and run it. The installer checks for Node.js and Git, clones the repo, installs dependencies, builds the app, and creates a desktop shortcut.
 
 ---
 
@@ -271,9 +295,18 @@ Then open **http://localhost:7860**. That's it — no account, no cloud, everyth
 
 ### Updating
 
-If you use the start scripts (`start.sh` / `start.bat`), **updates are automatic** — the launcher pulls the latest version from Git every time you start.
+**Updates are automatic.** Every time you launch Marinara Engine via `start.sh`, `start.bat`, or `start-termux.sh`, the launcher:
 
-To update manually:
+1. Pulls the latest code from GitHub (`git pull`)
+2. Detects if anything changed
+3. Reinstalls dependencies and rebuilds automatically
+4. Runs database migrations
+
+**You don't need to do anything** — just launch the app as usual and you'll always be on the latest version.
+
+This works for all platforms: Windows (installer or manual), macOS, Linux, and Termux.
+
+To update manually (e.g. if you don't use the start scripts):
 ```bash
 git pull
 pnpm install

@@ -2,7 +2,7 @@
 // Full-Page Connection Editor
 // Click a connection → opens this editor (like presets/characters)
 // ──────────────────────────────────────────────
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useUIStore } from "../../stores/ui.store";
 import {
   useConnection,
@@ -87,6 +87,21 @@ export function ConnectionEditor() {
   // Model search
   const [modelSearch, setModelSearch] = useState("");
   const [showModelDropdown, setShowModelDropdown] = useState(false);
+  const modelTriggerRef = useRef<HTMLDivElement>(null);
+  const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number; maxH: number } | null>(
+    null,
+  );
+
+  useLayoutEffect(() => {
+    if (!showModelDropdown || !modelTriggerRef.current) {
+      setDropdownRect(null);
+      return;
+    }
+    const rect = modelTriggerRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom - 8;
+    const maxH = Math.min(320, spaceBelow);
+    setDropdownRect({ top: rect.bottom + 4, left: rect.left, width: rect.width, maxH });
+  }, [showModelDropdown]);
 
   // Remote models fetched from provider API
   const [remoteModels, setRemoteModels] = useState<Array<{ id: string; name: string }>>([]);
@@ -555,7 +570,7 @@ export function ConnectionEditor() {
               </div>
             ) : (
               <>
-                <div className="relative">
+                <div ref={modelTriggerRef} className="relative">
                   <div
                     onClick={() => setShowModelDropdown(!showModelDropdown)}
                     className={cn(
@@ -600,7 +615,19 @@ export function ConnectionEditor() {
                           setModelSearch("");
                         }}
                       />
-                      <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-80 overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-2xl">
+                      <div
+                        className="fixed z-50 overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-2xl"
+                        style={
+                          dropdownRect
+                            ? {
+                                top: dropdownRect.top,
+                                left: dropdownRect.left,
+                                width: dropdownRect.width,
+                                maxHeight: dropdownRect.maxH,
+                              }
+                            : undefined
+                        }
+                      >
                         {/* Fetch from API button */}
                         <div className="sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--card)] p-2">
                           <button

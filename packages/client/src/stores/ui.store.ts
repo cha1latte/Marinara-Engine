@@ -5,10 +5,10 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 type Panel = "chat" | "characters" | "lorebooks" | "presets" | "connections" | "agents" | "personas" | "settings";
-type FontSize = 12 | 14 | 16 | 17;
+type FontSize = 12 | 14 | 16 | 17 | 19 | 22;
 export type VisualTheme = "default" | "sillytavern";
 export type HudPosition = "top" | "left" | "right";
-export type EchoChamberSide = "left" | "right";
+export type EchoChamberSide = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
 /** A user-installed custom theme */
 export interface CustomTheme {
@@ -187,7 +187,7 @@ export const useUIStore = create<UIState>()(
       regexDetailId: null,
 
       // Settings defaults
-      fontSize: 14 as FontSize,
+      fontSize: 17 as FontSize,
       chatFontSize: 16,
       fontFamily: "",
       enableStreaming: true,
@@ -208,7 +208,7 @@ export const useUIStore = create<UIState>()(
       hasCompletedOnboarding: false,
       linkApiBannerDismissed: false,
       echoChamberOpen: false,
-      echoChamberSide: "right" as EchoChamberSide,
+      echoChamberSide: "bottom-right" as EchoChamberSide,
 
       toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
       setSidebarOpen: (open) => set({ sidebarOpen: open }),
@@ -397,6 +397,13 @@ export const useUIStore = create<UIState>()(
     }),
     {
       name: "marinara-engine-ui",
+      version: 1,
+      migrate: (persisted: any, version: number) => {
+        if (version === 0 && persisted.fontSize === 14) {
+          persisted.fontSize = 17;
+        }
+        return persisted;
+      },
       partialize: (state) => ({
         sidebarOpen: state.sidebarOpen,
         sidebarWidth: state.sidebarWidth,

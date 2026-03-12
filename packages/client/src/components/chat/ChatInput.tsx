@@ -364,8 +364,8 @@ export function ChatInput({ mode = "conversation", characterNames = [] }: ChatIn
           }
           disabled={!activeChatId}
           rows={1}
-          spellCheck={false}
-          autoCorrect="off"
+          spellCheck
+          autoCorrect="on"
           className={cn(
             "max-h-[200px] flex-1 resize-none bg-transparent py-0 text-sm leading-normal outline-none disabled:cursor-not-allowed disabled:opacity-40",
             isRP

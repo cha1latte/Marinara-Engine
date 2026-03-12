@@ -7,15 +7,16 @@ import { dirname } from "node:path";
 
 type DrizzleDB = ReturnType<typeof import("drizzle-orm/libsql").drizzle<typeof schema>>;
 
-let db: DrizzleDB | null = null;
+let dbPromise: Promise<DrizzleDB> | null = null;
 
 async function createWithLibsql(dbPath: string): Promise<DrizzleDB> {
   const { createClient } = await import("@libsql/client");
   const { drizzle } = await import("drizzle-orm/libsql");
 
   const client = createClient({ url: `file:${dbPath}` });
-  client.execute("PRAGMA journal_mode=WAL");
-  client.execute("PRAGMA synchronous=NORMAL");
+  await client.execute("PRAGMA journal_mode=WAL");
+  await client.execute("PRAGMA synchronous=NORMAL");
+  await client.execute("PRAGMA busy_timeout=5000");
 
   return drizzle(client, { schema });
 }
@@ -27,6 +28,7 @@ async function createWithBetterSqlite3(dbPath: string): Promise<DrizzleDB> {
   const sqlite = new Database(dbPath);
   sqlite.pragma("journal_mode = WAL");
   sqlite.pragma("synchronous = NORMAL");
+  sqlite.pragma("busy_timeout = 5000");
 
   // Cast is safe — both Drizzle SQLite drivers share the same query API
   return drizzle(sqlite, { schema }) as unknown as DrizzleDB;
@@ -49,12 +51,12 @@ async function createDB(dbPath: string): Promise<DrizzleDB> {
 }
 
 export async function getDB() {
-  if (!db) {
+  if (!dbPromise) {
     const dbUrl = process.env.DATABASE_URL ?? "file:./data/marinara-engine.db";
     const dbPath = dbUrl.replace(/^file:/, "");
-    db = await createDB(dbPath);
+    dbPromise = createDB(dbPath);
   }
-  return db;
+  return dbPromise;
 }
 
 export type DB = DrizzleDB;

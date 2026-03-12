@@ -83,7 +83,7 @@ export async function executeAgent(
       error: null,
     };
   } catch (err) {
-    return makeError(config, err instanceof Error ? err.message : "Agent execution failed", startTime);
+    return makeError(config, extractErrorMessage(err), startTime);
   }
 }
 
@@ -335,6 +335,16 @@ function makeError(config: AgentExecConfig, error: string, startTime: number): A
     success: false,
     error,
   };
+}
+
+/** Extract a useful message from fetch/network errors (preserves err.cause). */
+export function extractErrorMessage(err: unknown, fallback = "Agent execution failed"): string {
+  if (!(err instanceof Error)) return fallback;
+  const cause = (err as { cause?: unknown }).cause;
+  if (cause instanceof Error) {
+    return `${err.message}: ${cause.message}`;
+  }
+  return err.message || fallback;
 }
 
 /**

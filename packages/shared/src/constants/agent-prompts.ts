@@ -353,7 +353,7 @@ Output format (JSON only, no markdown):
 4. Matching priority: location first, then mood/atmosphere, then time of day.`,
 
   /* ────────────────────────────────────────── */
-  "character-tracker": `Identify which characters (NPCs and party members — NOT the player persona) are present in the current scene after every assistant message and extract their state. The player persona is handled by the Persona Stats and World State agents.
+  "character-tracker": `Identify which characters (NPCs and party members, but NOT the player's {{user}}) are present in the current scene after every assistant message and extract their state. The player persona is handled by the Persona Stats and World State agents.
 
 Respond ONLY with valid JSON — no markdown, no commentary.
 
@@ -363,7 +363,7 @@ Schema:
     {
       "characterId": "string — ID or name",
       "name": "string — display name",
-      "emoji": "string — 1-2 emoji summarizing them",
+      "emoji": "string — 1 emoji summarizing them",
       "mood": "string — current emotional state",
       "appearance": "string|null — brief physical description (hair, eyes, build, distinguishing features)",
       "outfit": "string|null — what they're currently wearing, including accessories",
@@ -374,11 +374,11 @@ Schema:
 }
 
 1. Use inference. If a character was part of the conversation and hasn't left, they're still present. If someone is mentioned as nearby, waiting outside, or implied by context (e.g., a shopkeeper in a shop scene), include them.
-1a. Do NOT require a character to be explicitly named in every message to stay present. Characters persist in a scene until the narrative clearly moves away from them or they depart.
+1a. Do NOT require a character to be explicitly named in every message to stay present. Characters persist in a scene until the narrative clearly moves away from them, or they depart.
 1b. Characters who clearly left, were dismissed, or are no longer in the scene should be removed.
 2. Track HP, MP, and any other RPG stats defined on the character card — adjust values based on narrative events (combat damage, healing, mana usage, etc.). Use the card's initial values as maximums.
 3. Fill in appearance and outfit from the character's description or card if not mentioned in the current message. Don't leave them null just because this specific message didn't repeat the description.
-4. Preserve continuity with previous state — only change what the narrative changes.
+4. Preserve continuity with the previous state — only change what the narrative changes.
 5. If a new character enters the scene, add them with full details immediately.`,
 
   /* ────────────────────────────────────────── */
@@ -457,7 +457,7 @@ Consider:
 
 You have five tools:
 1. spotify_get_playlists — List the user's playlists (call first to see their library).
-2. spotify_get_playlist_tracks — Get tracks from a playlist or Liked Songs.
+2. spotify_get_playlist_tracks — Get tracks from a playlist or Liked Songs. Using playlistId='liked' returns the FULL Liked library (up to 500 tracks).
 3. spotify_search — Search Spotify's catalogue by mood, genre, artist, or keywords.
 4. spotify_play — Play a specific track or playlist URI.
 5. spotify_set_volume — Adjust volume (lower for quiet dialogue, higher for action).
@@ -469,7 +469,7 @@ IMPORTANT — You MUST use the tool functions above to actually control Spotify.
 - Only AFTER you have used the tools should you respond with the JSON summary below.
 
 Rules:
-1. ALWAYS check the user's playlists and Liked Songs first before searching the catalogue. Pick from their personal library whenever a good match exists — they chose those songs for a reason.
+1. ALWAYS check the user's Liked Songs (playlistId='liked') first — this returns their full library. Pick from their personal library whenever a good match exists — they chose those songs for a reason. Only search the catalogue if nothing in their library fits.
 2. Only change music when the mood noticeably shifts. Don't change every single turn.
 3. Playing an entire playlist URI is fine if it fits the mood (e.g., a "battle music" or "chill" playlist).
 4. Prefer instrumental or ambient tracks for immersion — lyrics can be distracting.

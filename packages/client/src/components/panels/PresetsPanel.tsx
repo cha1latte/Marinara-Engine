@@ -7,7 +7,7 @@ import { useUpdateChat } from "../../hooks/use-chats";
 import { useChatStore } from "../../stores/chat.store";
 import { useUIStore } from "../../stores/ui.store";
 import { ChoiceSelectionModal } from "../presets/ChoiceSelectionModal";
-import { Plus, Upload, FileText, Trash2, Check, Copy, Search, Code2, Hash } from "lucide-react";
+import { Plus, Download, FileText, Trash2, Check, Copy, Search, Code2, Hash } from "lucide-react";
 import { cn } from "../../lib/utils";
 
 type PresetRow = {
@@ -83,7 +83,7 @@ export function PresetsPanel() {
           onClick={() => openModal("import-preset")}
           className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-[var(--secondary)] px-3 py-2.5 text-xs font-medium text-[var(--secondary-foreground)] ring-1 ring-[var(--border)] transition-all hover:bg-[var(--accent)] active:scale-[0.98]"
         >
-          <Upload size={13} /> Import
+          <Download size={13} /> Import
         </button>
       </div>
 

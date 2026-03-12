@@ -252,7 +252,16 @@ export function CharacterEditor() {
           className="rounded-xl p-2 text-[var(--muted-foreground)] transition-all hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
           title="Export character"
         >
-          <Download size={18} />
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M10 13V3m0 0l-4 4m4-4l4 4"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <rect x="3" y="15" width="14" height="2" rx="1" fill="currentColor" />
+          </svg>
         </button>
 
         {/* Delete */}

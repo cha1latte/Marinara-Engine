@@ -10,22 +10,22 @@ export default defineConfig({
     tailwindcss(),
     !process.env.SKIP_PWA &&
       VitePWA({
-      registerType: "autoUpdate",
-      devOptions: { enabled: false },
-      manifest: false, // We use the static manifest.json in public/
-      workbox: {
-        globPatterns: ["**/*.{js,css,html,png,svg,ico,woff2}"],
-        navigateFallback: "/index.html",
-        navigateFallbackDenylist: [/^\/api\//, /^\/ws/],
-        runtimeCaching: [
-          {
-            urlPattern: ({ url }: { url: URL }) => url.pathname.startsWith("/api/"),
-            handler: "NetworkFirst",
-            options: { cacheName: "api-cache", expiration: { maxEntries: 50 } },
-          },
-        ],
-      },
-    }),
+        registerType: "autoUpdate",
+        devOptions: { enabled: false },
+        manifest: false, // We use the static manifest.json in public/
+        workbox: {
+          globPatterns: ["**/*.{js,css,html,png,svg,ico,woff2}"],
+          navigateFallback: "/index.html",
+          navigateFallbackDenylist: [/^\/api\//, /^\/ws/],
+          runtimeCaching: [
+            {
+              urlPattern: ({ url }: { url: URL }) => url.pathname.startsWith("/api/"),
+              handler: "NetworkFirst",
+              options: { cacheName: "api-cache", expiration: { maxEntries: 50 } },
+            },
+          ],
+        },
+      }),
   ].filter(Boolean),
   resolve: {
     alias: {

@@ -3,7 +3,7 @@
 // ──────────────────────────────────────────────
 import { useState, useRef } from "react";
 import { Modal } from "../ui/Modal";
-import { Upload, FileJson, Image, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { Download, FileJson, Image, CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { characterKeys } from "../../hooks/use-characters";
 import { lorebookKeys } from "../../hooks/use-lorebooks";
@@ -102,7 +102,7 @@ export function ImportCharacterModal({ open, onClose }: Props) {
               : "border-[var(--border)] hover:border-[var(--muted-foreground)] hover:bg-[var(--secondary)]/50"
           }`}
         >
-          <Upload
+          <Download
             size={32}
             className={`transition-colors ${dragOver ? "text-[var(--primary)]" : "text-[var(--muted-foreground)]"}`}
           />

@@ -11,11 +11,12 @@ import {
   useDeleteGroup,
 } from "../../hooks/use-characters";
 import { useUpdateChat, useCreateMessage } from "../../hooks/use-chats";
+import { api } from "../../lib/api-client";
 import { useChatStore } from "../../stores/chat.store";
 import {
   Plus,
   Trash2,
-  Upload,
+  Download,
   User,
   Check,
   Search,
@@ -68,8 +69,10 @@ export function CharactersPanel() {
     charId: string;
     charName: string;
     message: string;
+    alternateGreetings: string[];
   } | null>(null);
   const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [tagsExpanded, setTagsExpanded] = useState(false);
 
   const chatCharacterIds: string[] = activeChat
     ? ((typeof activeChat.characterIds === "string" ? JSON.parse(activeChat.characterIds) : activeChat.characterIds) ??
@@ -180,9 +183,10 @@ export function CharactersPanel() {
           try {
             const parsed = typeof char.data === "string" ? JSON.parse(char.data) : char.data;
             const firstMes = (parsed as { first_mes?: string }).first_mes;
+            const altGreetings = (parsed as { alternate_greetings?: string[] }).alternate_greetings ?? [];
             const name = (parsed as { name?: string }).name ?? "Unknown";
             if (firstMes) {
-              setFirstMesConfirm({ charId, charName: name, message: firstMes });
+              setFirstMesConfirm({ charId, charName: name, message: firstMes, alternateGreetings: altGreetings });
             }
           } catch {
             /* ignore */
@@ -208,9 +212,10 @@ export function CharactersPanel() {
             try {
               const parsed = typeof char.data === "string" ? JSON.parse(char.data) : char.data;
               const firstMes = (parsed as { first_mes?: string }).first_mes;
+              const altGreetings = (parsed as { alternate_greetings?: string[] }).alternate_greetings ?? [];
               const name = (parsed as { name?: string }).name ?? "Unknown";
               if (firstMes) {
-                setFirstMesConfirm({ charId, charName: name, message: firstMes });
+                setFirstMesConfirm({ charId, charName: name, message: firstMes, alternateGreetings: altGreetings });
                 break; // show one at a time
               }
             } catch {
@@ -285,30 +290,47 @@ export function CharactersPanel() {
 
       {/* Tag filter bar */}
       {allTags.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {activeTag && (
-            <button
-              onClick={() => setActiveTag(null)}
-              className="flex items-center gap-1 rounded-full bg-[var(--destructive)]/10 px-2 py-0.5 text-[10px] font-medium text-[var(--destructive)] transition-all hover:bg-[var(--destructive)]/20"
-            >
-              <X size={8} /> Clear
-            </button>
-          )}
-          {allTags.map((tag) => (
-            <button
-              key={tag}
-              onClick={() => setActiveTag(activeTag === tag ? null : tag)}
-              className={cn(
-                "flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-all",
-                activeTag === tag
-                  ? "bg-[var(--primary)]/20 text-[var(--primary)] ring-1 ring-[var(--primary)]/30"
-                  : "bg-[var(--secondary)] text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]",
+        <div className="space-y-1">
+          <button
+            onClick={() => setTagsExpanded(!tagsExpanded)}
+            className={cn(
+              "flex items-center gap-1.5 rounded-lg px-2 py-1 text-[10px] font-medium transition-all",
+              activeTag
+                ? "bg-[var(--primary)]/15 text-[var(--primary)]"
+                : "bg-[var(--secondary)] text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]",
+            )}
+          >
+            <Tag size={10} />
+            Tags ({allTags.length}){activeTag && <span className="ml-0.5 opacity-70">· {activeTag}</span>}
+            <ChevronDown size={10} className={cn("transition-transform", tagsExpanded && "rotate-180")} />
+          </button>
+          {tagsExpanded && (
+            <div className="flex flex-wrap gap-1">
+              {activeTag && (
+                <button
+                  onClick={() => setActiveTag(null)}
+                  className="flex items-center gap-1 rounded-full bg-[var(--destructive)]/10 px-2 py-0.5 text-[10px] font-medium text-[var(--destructive)] transition-all hover:bg-[var(--destructive)]/20"
+                >
+                  <X size={8} /> Clear
+                </button>
               )}
-            >
-              <Tag size={8} />
-              {tag}
-            </button>
-          ))}
+              {allTags.map((tag) => (
+                <button
+                  key={tag}
+                  onClick={() => setActiveTag(activeTag === tag ? null : tag)}
+                  className={cn(
+                    "flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-all",
+                    activeTag === tag
+                      ? "bg-[var(--primary)]/20 text-[var(--primary)] ring-1 ring-[var(--primary)]/30"
+                      : "bg-[var(--secondary)] text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]",
+                  )}
+                >
+                  <Tag size={8} />
+                  {tag}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -324,7 +346,7 @@ export function CharactersPanel() {
           onClick={() => openModal("import-character")}
           className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-[var(--secondary)] px-3 py-2 text-xs font-medium text-[var(--secondary-foreground)] ring-1 ring-[var(--border)] transition-all hover:bg-[var(--accent)] active:scale-[0.98]"
         >
-          <Upload size={12} /> Import
+          <Download size={12} /> Import
         </button>
         <button
           onClick={() => openModal("character-maker")}
@@ -746,12 +768,20 @@ export function CharactersPanel() {
                 Skip
               </button>
               <button
-                onClick={() => {
-                  createMessage.mutate({
+                onClick={async () => {
+                  const msg = await createMessage.mutateAsync({
                     role: "assistant",
                     content: firstMesConfirm.message,
                     characterId: firstMesConfirm.charId,
                   });
+                  // Add alternate greetings as swipes on the first message
+                  if (msg?.id && firstMesConfirm.alternateGreetings.length > 0) {
+                    for (const greeting of firstMesConfirm.alternateGreetings) {
+                      if (greeting.trim()) {
+                        await api.post(`/chats/${activeChat!.id}/messages/${msg.id}/swipes`, { content: greeting });
+                      }
+                    }
+                  }
                   setFirstMesConfirm(null);
                 }}
                 className="rounded-lg bg-[var(--primary)] px-3 py-1.5 text-xs font-medium text-[var(--primary-foreground)] transition-colors hover:opacity-90"

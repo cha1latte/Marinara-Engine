@@ -10,7 +10,7 @@
 
 ; ── App metadata ──
 !define APP_NAME "Marinara Engine"
-!define APP_VERSION "1.3.0"
+!define APP_VERSION "1.3.1"
 !define APP_PUBLISHER "SpicyMarinara"
 !define APP_URL "https://github.com/SpicyMarinara/Marinara-Engine"
 !define REPO_URL "https://github.com/SpicyMarinara/Marinara-Engine.git"
@@ -25,7 +25,8 @@ SetCompressor /SOLID lzma
 ShowInstDetails show
 
 ; ── Modern UI config ──
-!define MUI_ICON "${NSISDIR}\Contrib\Graphics\Icons\orange-install.ico"
+!define MUI_ICON "app-icon.ico"
+!define MUI_UNICON "app-icon.ico"
 !define MUI_ABORTWARNING
 BrandingText "${APP_NAME} v${APP_VERSION}"
 !define MUI_WELCOMEPAGE_TITLE "Welcome to ${APP_NAME} Setup"
@@ -139,11 +140,15 @@ Section "Install" SecInstall
   Pop $0
   DetailPrint "Database ready."
 
+  ; ── Copy app icon ──
+  SetOutPath "$INSTDIR"
+  File "app-icon.ico"
+
   ; ── Desktop shortcut ──
   DetailPrint "Creating shortcuts..."
-  CreateShortCut "$DESKTOP\Marinara Engine.lnk" "$INSTDIR\start.bat" "" "$INSTDIR\start.bat" 0
+  CreateShortCut "$DESKTOP\Marinara Engine.lnk" "$INSTDIR\start.bat" "" "$INSTDIR\app-icon.ico" 0
   CreateDirectory "$SMPROGRAMS\${APP_NAME}"
-  CreateShortCut "$SMPROGRAMS\${APP_NAME}\Marinara Engine.lnk" "$INSTDIR\start.bat"
+  CreateShortCut "$SMPROGRAMS\${APP_NAME}\Marinara Engine.lnk" "$INSTDIR\start.bat" "" "$INSTDIR\app-icon.ico" 0
   CreateShortCut "$SMPROGRAMS\${APP_NAME}\Uninstall.lnk" "$INSTDIR\uninstall.exe"
 
   ; ── Uninstaller ──
@@ -155,6 +160,7 @@ Section "Install" SecInstall
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "DisplayVersion" "${APP_VERSION}"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "Publisher" "${APP_PUBLISHER}"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "URLInfoAbout" "${APP_URL}"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "DisplayIcon" "$INSTDIR\app-icon.ico"
 
   DetailPrint "Installation complete!"
 SectionEnd

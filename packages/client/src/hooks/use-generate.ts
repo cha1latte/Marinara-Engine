@@ -289,7 +289,16 @@ export function useGenerate() {
               const patch = event.data as Record<string, unknown>;
               const current = useGameStateStore.getState().current;
               if (current) {
-                setGameState({ ...current, ...patch } as any);
+                const merged = { ...current, ...patch };
+                // Deep-merge playerStats so partial updates don't clobber sibling fields
+                if (patch.playerStats && typeof patch.playerStats === "object" && current.playerStats) {
+                  (merged as any).playerStats = { ...current.playerStats, ...(patch.playerStats as object) };
+                }
+                setGameState(merged as any);
+              } else {
+                // Character-tracker/persona-stats may arrive before world-state creates
+                // the base game state — seed a minimal state so data isn't lost.
+                setGameState(patch as any);
               }
               break;
             }
@@ -444,6 +453,9 @@ export function useGenerate() {
                   }
                 }
               }
+              if (!result.success && result.error) {
+                toast.error(`${result.agentName ?? result.agentType} failed: ${result.error}`);
+              }
               break;
             }
             case "agents_retry_failed": {
@@ -462,7 +474,15 @@ export function useGenerate() {
             case "game_state_patch": {
               const patch = event.data as Record<string, unknown>;
               const current = useGameStateStore.getState().current;
-              if (current) setGameState({ ...current, ...patch } as any);
+              if (current) {
+                const merged = { ...current, ...patch };
+                if (patch.playerStats && typeof patch.playerStats === "object" && current.playerStats) {
+                  (merged as any).playerStats = { ...current.playerStats, ...(patch.playerStats as object) };
+                }
+                setGameState(merged as any);
+              } else {
+                setGameState(patch as any);
+              }
               break;
             }
             case "error": {
@@ -478,7 +498,12 @@ export function useGenerate() {
         if (!hasError) toast.success("Agent retry completed");
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") return;
-        const msg = error instanceof Error ? error.message : "Agent retry failed";
+        const msg =
+          error instanceof Error
+            ? (error as { cause?: unknown }).cause instanceof Error
+              ? `${error.message}: ${(error as { cause?: Error }).cause!.message}`
+              : error.message
+            : "Agent retry failed";
         toast.error(msg);
       } finally {
         setProcessing(false);
@@ -546,6 +571,17 @@ function formatAgentBubble(agentType: string, agentName: string, data: unknown):
       return parts.join(" · ");
     }
 
+    case "character-tracker": {
+      const chars = (d.presentCharacters as any[]) ?? [];
+      if (!chars.length) return null;
+      return chars
+        .map((c: any) => {
+          const emoji = c.emoji ? `${c.emoji} ` : "👤 ";
+          return `${emoji}${c.name}`;
+        })
+        .join(", ");
+    }
+
     case "background": {
       const reason = d.reason as string;
       const chosen = d.chosen as string | null;
@@ -580,6 +616,38 @@ function formatAgentBubble(agentType: string, agentName: string, data: unknown):
       const trimmed = text.trim();
       const preview = trimmed.length > 120 ? trimmed.slice(0, 120) + "…" : trimmed;
       return `✍️ ${preview}`;
+    }
+
+    case "persona-stats": {
+      const stats = (d.stats as any[]) ?? [];
+      const status = d.status as string;
+      if (!stats.length && !status) return null;
+      const parts: string[] = [];
+      if (status) parts.push(status);
+      for (const s of stats) {
+        parts.push(`${s.name}: ${s.value}/${s.max ?? 100}`);
+      }
+      return `📊 ${parts.join(" · ")}`;
+    }
+
+    case "illustrator": {
+      const shouldGenerate = d.shouldGenerate as boolean;
+      if (!shouldGenerate) return null;
+      const style = d.style as string;
+      const reason = d.reason as string;
+      return `🎨 ${reason || "Generating scene illustration"}${style ? ` (${style})` : ""}`;
+    }
+
+    case "lorebook-keeper": {
+      const updates = (d.updates as any[]) ?? [];
+      if (!updates.length) return null;
+      return updates.map((u: any) => `📖 ${u.action === "create" ? "New" : "Updated"}: ${u.entryName}`).join("\n");
+    }
+
+    case "editor": {
+      const changes = (d.changes as any[]) ?? [];
+      if (!changes.length) return `✅ No edits needed`;
+      return changes.map((c: any) => `✏️ ${c.description}`).join("\n");
     }
 
     case "html": {
