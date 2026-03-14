@@ -1223,25 +1223,47 @@ export async function generateRoutes(app: FastifyInstance) {
 
           // Stream tokens in real-time via onToken callback
           const onToken = (chunk: string) => {
+            // If the request has been aborted, skip emitting any further tokens.
+            if (abortController.signal.aborted) {
+              return;
+            }
             fullResponse += chunk;
             reply.raw.write(`data: ${JSON.stringify({ type: "token", data: chunk })}\n\n`);
           };
 
           for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-            if (abortController.signal.aborted) break;
-            const result = await provider.chatComplete(loopMessages, {
-              model: conn.model,
-              temperature,
-              maxTokens,
-              tools: toolDefs,
-              enableCaching: conn.enableCaching === "true",
-              enableThinking: showThoughts,
-              reasoningEffort: resolvedEffort ?? undefined,
-              verbosity: verbosity ?? undefined,
-              onThinking,
-              onToken,
-              signal: abortController.signal,
-            });
+            // Treat abort as a silent cancellation: stop the pipeline immediately.
+            if (abortController.signal.aborted) {
+              return;
+            }
+
+            let result;
+            try {
+              result = await provider.chatComplete(loopMessages, {
+                model: conn.model,
+                temperature,
+                maxTokens,
+                tools: toolDefs,
+                enableCaching: conn.enableCaching === "true",
+                enableThinking: showThoughts,
+                reasoningEffort: resolvedEffort ?? undefined,
+                verbosity: verbosity ?? undefined,
+                onThinking,
+                onToken,
+                signal: abortController.signal,
+              });
+            } catch (err: any) {
+              // If the error was caused by an abort, cancel silently and skip post-processing.
+              if (abortController.signal.aborted || (err && err.name === "AbortError")) {
+                return;
+              }
+              throw err;
+            }
+
+            // If abort was triggered during chat completion, exit before using the result.
+            if (abortController.signal.aborted) {
+              return;
+            }
 
             // If provider doesn't support onToken (fell back to non-streaming),
             // write the content conventionally
