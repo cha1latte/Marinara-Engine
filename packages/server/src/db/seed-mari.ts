@@ -299,7 +299,10 @@ export async function seedProfessorMari(db: DB) {
   const serialized = JSON.stringify(MARI_CHARACTER_DATA);
 
   // Check if Mari already exists
-  const existing = await db.select().from(characters).where(eq(characters.id, PROFESSOR_MARI_ID));
+  const existing = await db
+    .select()
+    .from(characters)
+    .where(eq(characters.id, PROFESSOR_MARI_ID));
 
   if (existing.length > 0) {
     // Update her card data if it changed (e.g. after an app update)
