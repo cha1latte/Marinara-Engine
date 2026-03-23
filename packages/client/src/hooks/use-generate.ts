@@ -1,7 +1,7 @@
 // ──────────────────────────────────────────────
 // React Query: Generation (streaming + agent pipeline)
 // ──────────────────────────────────────────────
-import { useCallback, useRef } from "react";
+import { useCallback } from "react";
 import { useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api } from "../lib/api-client";
@@ -28,7 +28,6 @@ import type { Message } from "@marinara-engine/shared";
  */
 export function useGenerate() {
   const qc = useQueryClient();
-  const generatingRef = useRef<Set<string>>(new Set());
   // Use individual selectors to avoid re-rendering on every store change
   const setStreaming = useChatStore((s) => s.setStreaming);
   const setStreamBuffer = useChatStore((s) => s.setStreamBuffer);
@@ -64,11 +63,12 @@ export function useGenerate() {
       // where autonomous messaging + user input both fire generate at once.
       // Different chats CAN generate concurrently (e.g. idle/DnD delay in chat A
       // while the user sends in chat B).
-      if (generatingRef.current.has(params.chatId)) {
+      // Uses the shared abortControllers map as the source of truth so ALL callers
+      // of useGenerate() coordinate (the old per-instance useRef could diverge).
+      if (useChatStore.getState().abortControllers.has(params.chatId)) {
         console.warn("[Generate] Skipped — generation already in progress for this chat");
         return false;
       }
-      generatingRef.current.add(params.chatId);
 
       // Abort any in-progress generation for the SAME chat before starting a new one.
       const prev = useChatStore.getState().abortControllers.get(params.chatId);
@@ -85,7 +85,7 @@ export function useGenerate() {
 
       // Only touch global streaming UI state if the user is viewing this chat.
       // Background generations (e.g. autonomous messaging) run silently,
-      // tracked only by generatingRef + abortControllers.
+      // tracked only by abortControllers.
       if (isActiveChat()) {
         setStreaming(true, params.chatId);
         clearStreamBuffer();
@@ -232,6 +232,8 @@ export function useGenerate() {
             }
 
             case "agent_debug": {
+              // Only update debug UI for the active chat
+              if (!isActiveChat()) break;
               const debug = event.data as {
                 phase: string;
                 agents?: Array<{ type: string; name: string; model: string; maxTokens: number }>;
@@ -286,18 +288,6 @@ export function useGenerate() {
                 durationMs: number;
               };
 
-              // Store the result
-              addResult(result.agentType, {
-                agentId: result.agentType,
-                agentType: result.agentType,
-                type: result.resultType as any,
-                data: result.data,
-                tokensUsed: 0,
-                durationMs: result.durationMs,
-                success: result.success,
-                error: result.error,
-              });
-
               // Always log agent results to console for visibility (use warn so it shows even if Info is filtered)
               if (result.success) {
                 console.warn(
@@ -310,6 +300,22 @@ export function useGenerate() {
                   result.data,
                 );
               }
+
+              // Only update agent/game/UI stores for the active chat so a
+              // background generation doesn't corrupt what the user sees.
+              if (!isActiveChat()) break;
+
+              // Store the result
+              addResult(result.agentType, {
+                agentId: result.agentType,
+                agentType: result.agentType,
+                type: result.resultType as any,
+                data: result.data,
+                tokensUsed: 0,
+                durationMs: result.durationMs,
+                success: result.success,
+                error: result.error,
+              });
 
               // Display as thought bubble for informational agents
               if (result.success && result.data) {
@@ -487,6 +493,7 @@ export function useGenerate() {
             case "game_state_patch": {
               const patch = event.data as Record<string, unknown>;
               console.warn(`[Generate] ${event.type} received:`, patch);
+              if (!isActiveChat()) break;
               const current = useGameStateStore.getState().current;
               if (current) {
                 const merged = { ...current, ...patch };
@@ -748,12 +755,6 @@ export function useGenerate() {
         // because two generations can target the same chat (e.g. autonomous
         // + user send). The latest generation replaces the AbortController,
         // so the superseded one knows it no longer owns the state.
-        //
-        // Release the per-chat generation lock BEFORE clearing streaming
-        // state. Otherwise there's a window where isStreaming is false but
-        // the ref still blocks generate(), causing a subsequent send to be
-        // silently dropped (the message vanishes).
-        generatingRef.current.delete(params.chatId);
         const stillOwner = useChatStore.getState().abortControllers.get(params.chatId) === abortController;
         if (stillOwner) {
           // Only clear global streaming/UI state if this chat is still the one
@@ -804,6 +805,7 @@ export function useGenerate() {
 
   const retryAgents = useCallback(
     async (chatId: string, agentTypes: string[]) => {
+      const isActiveChat = () => useChatStore.getState().activeChatId === chatId;
       const abortController = new AbortController();
       useChatStore.getState().setAbortController(chatId, abortController);
       setProcessing(true);
@@ -936,6 +938,7 @@ export function useGenerate() {
             case "game_state_patch": {
               const patch = event.data as Record<string, unknown>;
               console.warn(`[Retry] ${event.type} received:`, patch);
+              if (!isActiveChat()) break;
               const current = useGameStateStore.getState().current;
               if (current) {
                 const merged = { ...current, ...patch };
