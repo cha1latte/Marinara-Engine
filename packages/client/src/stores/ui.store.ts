@@ -89,6 +89,7 @@ interface UIState {
 
   // ── Sound ──
   convoNotificationSound: boolean;
+  rpNotificationSound: boolean;
 
   // ── Custom Conversation Prompt ──
   /** User's custom default system prompt for new conversations (null = built-in default). */
@@ -179,6 +180,7 @@ interface UIState {
   setConvoGradientFrom: (v: string) => void;
   setConvoGradientTo: (v: string) => void;
   setConvoNotificationSound: (v: boolean) => void;
+  setRpNotificationSound: (v: boolean) => void;
   setCustomConversationPrompt: (v: string | null) => void;
   setEnterToSendRP: (v: boolean) => void;
   setEnterToSendConvo: (v: boolean) => void;
@@ -237,6 +239,7 @@ export const useUIStore = create<UIState>()(
       convoGradientFrom: "#0a0a0e",
       convoGradientTo: "#1c2133",
       convoNotificationSound: true,
+      rpNotificationSound: true,
       customConversationPrompt: null,
       enterToSendRP: false,
       enterToSendConvo: true,
@@ -415,6 +418,7 @@ export const useUIStore = create<UIState>()(
       setConvoGradientFrom: (v) => set({ convoGradientFrom: v }),
       setConvoGradientTo: (v) => set({ convoGradientTo: v }),
       setConvoNotificationSound: (v) => set({ convoNotificationSound: v }),
+      setRpNotificationSound: (v) => set({ rpNotificationSound: v }),
       setCustomConversationPrompt: (v) => set({ customConversationPrompt: v }),
       setEnterToSendRP: (v) => set({ enterToSendRP: v }),
       setEnterToSendConvo: (v) => set({ enterToSendConvo: v }),
@@ -449,7 +453,7 @@ export const useUIStore = create<UIState>()(
     }),
     {
       name: "marinara-engine-ui",
-      version: 4,
+      version: 5,
       migrate: (persisted: any, version: number) => {
         if (version === 0 && persisted.fontSize === 14) {
           persisted.fontSize = 17;
@@ -477,6 +481,12 @@ export const useUIStore = create<UIState>()(
         if (version <= 3) {
           if (persisted.convoNotificationSound === undefined) {
             persisted.convoNotificationSound = true;
+          }
+        }
+        // v4 → v5: add RP notification sound default
+        if (version <= 4) {
+          if (persisted.rpNotificationSound === undefined) {
+            persisted.rpNotificationSound = true;
           }
         }
         return persisted;
@@ -514,6 +524,7 @@ export const useUIStore = create<UIState>()(
         userStatusManual: state.userStatusManual,
         userStatus: state.userStatus,
         convoNotificationSound: state.convoNotificationSound,
+        rpNotificationSound: state.rpNotificationSound,
         customConversationPrompt: state.customConversationPrompt,
       }),
     },

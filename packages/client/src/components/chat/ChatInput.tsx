@@ -1,10 +1,10 @@
 // ──────────────────────────────────────────────
 // Chat: Input — mode-aware styling
 // ──────────────────────────────────────────────
-import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { useState, useRef, useCallback, useEffect, memo } from "react";
 import { Send, Paperclip, StopCircle, X } from "lucide-react";
 import { toast } from "sonner";
-import { useQueryClient, type InfiniteData } from "@tanstack/react-query";
+import { useQueryClient, useQuery, type InfiniteData } from "@tanstack/react-query";
 import { useChatStore } from "../../stores/chat.store";
 import { useUIStore } from "../../stores/ui.store";
 import { useGenerate } from "../../hooks/use-generate";
@@ -25,12 +25,15 @@ interface Attachment {
   name: string;
 }
 
+// Normalize curly/smart quotes to straight quotes (hoisted to avoid recreation)
+const normalizeQuotes = (s: string) => s.replace(/["\u201C\u201D\u201E\u201F]/g, '"').replace(/[\u2018\u2019]/g, "'");
+
 interface ChatInputProps {
   mode?: "conversation" | "roleplay";
   characterNames?: string[];
 }
 
-export function ChatInput({ mode = "conversation", characterNames = [] }: ChatInputProps) {
+export const ChatInput = memo(function ChatInput({ mode = "conversation", characterNames = [] }: ChatInputProps) {
   const [hasInput, setHasInput] = useState(false);
   const [completions, setCompletions] = useState<SlashCommand[]>([]);
   const [selectedCompletion, setSelectedCompletion] = useState(0);
@@ -49,6 +52,7 @@ export function ChatInput({ mode = "conversation", characterNames = [] }: ChatIn
   const enterToSend = useUIStore((s) => s.enterToSendRP);
   const createMessage = useCreateMessage(activeChatId);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const resizeRafRef = useRef<number>(0);
   const qc = useQueryClient();
 
   // Restore draft when mounting or switching chats
@@ -83,6 +87,8 @@ export function ChatInput({ mode = "conversation", characterNames = [] }: ChatIn
     return () => {
       // Cancel pending debounce timers
       if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+      // Cancel pending resize rAF
+      if (resizeRafRef.current) cancelAnimationFrame(resizeRafRef.current);
       // Flush draft synchronously
       const chatId = useChatStore.getState().activeChatId;
       if (chatId && textarea) {
@@ -96,17 +102,19 @@ export function ChatInput({ mode = "conversation", characterNames = [] }: ChatIn
     };
   }, []);
 
-  // Derive whether the user can retry (last message is theirs with no assistant reply)
-  const canRetry = useMemo(() => {
-    if (!activeChatId || isStreaming) return false;
-    const cached = qc.getQueryData<InfiniteData<Message[]>>(chatKeys.messages(activeChatId));
-    if (!cached?.pages?.length) return false;
-    // Flatten all pages to find the most recent message without assuming page ordering.
-    const allMessages = cached.pages.flatMap((page) => page ?? []);
-    if (!allMessages.length) return false;
-    const lastMsg = allMessages[allMessages.length - 1];
-    return !!lastMsg && lastMsg.role === "user";
-  }, [activeChatId, isStreaming, qc]);
+  // Reactively derive the last message's role from the query cache.
+  // pages[0] is the newest page; its last element is the most recent message.
+  const lastMessageRole = useQuery({
+    queryKey: chatKeys.messages(activeChatId ?? ""),
+    enabled: false, // Don't fetch — just subscribe to existing cache
+    select: (data: InfiniteData<Message[]>) => {
+      const firstPage = data?.pages?.[0];
+      return firstPage?.[firstPage.length - 1]?.role ?? null;
+    },
+  }).data ?? null;
+
+  const canRetry = !isStreaming && lastMessageRole === "user";
+  const canContinue = !isStreaming && mode === "roleplay" && lastMessageRole === "assistant";
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -132,8 +140,6 @@ export function ChatInput({ mode = "conversation", characterNames = [] }: ChatIn
     setAttachments((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  // Normalize curly/smart quotes to straight quotes
-  const normalizeQuotes = (s: string) => s.replace(/[“”„‟]/g, '"').replace(/[‘’]/g, "'");
 
   // Get the current textarea value (always from the DOM directly)
   const getValue = () => textareaRef.current?.value ?? "";
@@ -158,14 +164,13 @@ export function ChatInput({ mode = "conversation", characterNames = [] }: ChatIn
     const hasText = raw.trim().length > 0;
     const hasFiles = attachments.length > 0;
 
-    // If input is empty, check if we should retry a failed generation
-    // (last message is from the user with no assistant response after it)
+    // If input is empty, check if we should retry or continue
     if (!hasText && !hasFiles) {
       const cached = qc.getQueryData<InfiniteData<Message[]>>(chatKeys.messages(activeChatId));
-      const chronological = [...(cached?.pages ?? [])].reverse().flat();
-      const lastMsg = chronological[chronological.length - 1];
-      if (lastMsg && lastMsg.role === "user") {
-        // Retry: generate a response for the existing last user message
+      const firstPage = cached?.pages?.[0];
+      const lastMsg = firstPage?.[firstPage.length - 1];
+      if (lastMsg && (lastMsg.role === "user" || (lastMsg.role === "assistant" && mode === "roleplay"))) {
+        // Retry (last msg is user) or Continue (last msg is assistant, roleplay mode)
         try {
           await generate({ chatId: activeChatId, connectionId: null });
         } catch (error) {
@@ -233,7 +238,7 @@ export function ChatInput({ mode = "conversation", characterNames = [] }: ChatIn
       toast.error(msg);
       console.error("Send failed:", error);
     }
-  }, [activeChatId, isStreaming, generate, applyToUserInput, buildContext, qc, clearInputDraft, attachments]);
+  }, [activeChatId, isStreaming, generate, applyToUserInput, buildContext, qc, clearInputDraft, attachments, mode]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // Autocomplete navigation
@@ -300,10 +305,14 @@ export function ChatInput({ mode = "conversation", characterNames = [] }: ChatIn
       }, 300);
     }
 
-    // Auto-resize textarea immediately (no debounce — avoids visible flash
-    // when pressing Enter, where height="auto" would briefly collapse the textarea)
-    el.style.height = "auto";
-    el.style.height = Math.min(el.scrollHeight, 200) + "px";
+    // Auto-resize textarea — batched via rAF to avoid layout thrashing on
+    // every keystroke while still responding within the same visual frame.
+    if (resizeRafRef.current) cancelAnimationFrame(resizeRafRef.current);
+    resizeRafRef.current = requestAnimationFrame(() => {
+      if (!el) return;
+      el.style.height = "auto";
+      el.style.height = Math.min(el.scrollHeight, 200) + "px";
+    });
 
     // Slash command autocomplete
     const trimmed = fixed.trim();
@@ -436,12 +445,12 @@ export function ChatInput({ mode = "conversation", characterNames = [] }: ChatIn
         {/* Send / Stop button */}
         <button
           onClick={isStreaming ? () => useChatStore.getState().stopGeneration() : handleSend}
-          disabled={(!hasInput && !attachments.length && !isStreaming && !canRetry) || !activeChatId}
+          disabled={(!hasInput && !attachments.length && !isStreaming && !canRetry && !canContinue) || !activeChatId}
           className={cn(
             "mari-chat-send-btn flex h-8 w-8 items-center justify-center rounded-xl transition-all duration-200",
             isStreaming
               ? "text-foreground hover:opacity-80"
-              : (hasInput || attachments.length || canRetry) && activeChatId
+              : (hasInput || attachments.length || canRetry || canContinue) && activeChatId
                 ? "text-foreground hover:text-foreground/80 active:scale-90"
                 : "text-foreground/20",
           )}
@@ -455,4 +464,4 @@ export function ChatInput({ mode = "conversation", characterNames = [] }: ChatIn
       </div>
     </div>
   );
-}
+});

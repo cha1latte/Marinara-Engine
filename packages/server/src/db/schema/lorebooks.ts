@@ -55,6 +55,7 @@ export const lorebookEntries = sqliteTable("lorebook_entries", {
   sticky: integer("sticky"),
   cooldown: integer("cooldown"),
   delay: integer("delay"),
+  ephemeral: integer("ephemeral"),
   group: text("group").notNull().default(""),
   groupWeight: integer("group_weight"),
 

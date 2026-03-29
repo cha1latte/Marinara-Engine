@@ -11,6 +11,7 @@
 // - [selfie] or [selfie: context="description of the selfie"]
 // - [memory: target="CharName", summary="description of the memory"]
 // - [scene: scenario="...", background="...", plan="..."] (initiate a mini-roleplay scene)
+// - [haptic: action="vibrate", intensity=0.5, duration=3] (haptic device feedback)
 // - <influence>text</influence> (OOC influence for connected roleplay)
 //
 // Assistant commands (Professor Mari):
@@ -62,6 +63,16 @@ export interface InfluenceCommand {
   content: string;
 }
 
+export interface HapticCommand {
+  type: "haptic";
+  /** Device action */
+  action: "vibrate" | "oscillate" | "rotate" | "position" | "stop";
+  /** Intensity / speed (0.0-1.0) */
+  intensity?: number;
+  /** Duration in seconds */
+  duration?: number;
+}
+
 // ── Assistant commands (Professor Mari) ──
 
 export interface CreatePersonaCommand {
@@ -102,6 +113,7 @@ export type CharacterCommand =
   | MemoryCommand
   | SceneCommand
   | InfluenceCommand
+  | HapticCommand
   | AssistantCommand;
 
 /** Regex patterns for each command type */
@@ -110,6 +122,7 @@ const CROSS_POST_RE = /\[cross_post:\s*target="([^"]+)"\]/gi;
 const SELFIE_RE = /\[selfie(?::\s*context="([^"]*)")?\]/gi;
 const MEMORY_RE = /\[memory:\s*target="([^"]+)"\s*,\s*summary="([^"]+)"\]/gi;
 const SCENE_RE = /\[scene:\s*([^\]]+)\]/gi;
+const HAPTIC_RE = /\[haptic:\s*([^\]]+)\]/gi;
 const INFLUENCE_RE = /<influence>([\s\S]*?)<\/influence>/gi;
 
 // Assistant command regexes
@@ -188,6 +201,30 @@ export function parseCharacterCommands(content: string): {
     if (text) commands.push({ type: "influence", content: text });
   }
 
+  // Parse haptic commands
+  for (const match of content.matchAll(HAPTIC_RE)) {
+    const params = match[1]!;
+    const cmd: HapticCommand = { type: "haptic", action: "vibrate" };
+    const actionMatch = params.match(/action="([^"]+)"/);
+    if (actionMatch) {
+      const a = actionMatch[1]!.toLowerCase();
+      if (["vibrate", "oscillate", "rotate", "position", "stop"].includes(a)) {
+        cmd.action = a as HapticCommand["action"];
+      }
+    }
+    const intensityMatch = params.match(/intensity=([0-9.]+)/);
+    if (intensityMatch) {
+      const v = parseFloat(intensityMatch[1]!);
+      if (Number.isFinite(v)) cmd.intensity = Math.max(0, Math.min(1, v));
+    }
+    const durationMatch = params.match(/duration=([0-9.]+)/);
+    if (durationMatch) {
+      const v = parseFloat(durationMatch[1]!);
+      if (Number.isFinite(v)) cmd.duration = Math.max(0, v);
+    }
+    commands.push(cmd);
+  }
+
   // Parse assistant commands (Professor Mari)
   for (const match of content.matchAll(CREATE_PERSONA_RE)) {
     const params = match[1]!;
@@ -248,6 +285,7 @@ export function parseCharacterCommands(content: string): {
     .replace(SELFIE_RE, "")
     .replace(MEMORY_RE, "")
     .replace(SCENE_RE, "")
+    .replace(HAPTIC_RE, "")
     .replace(INFLUENCE_RE, "")
     .replace(CREATE_PERSONA_RE, "")
     .replace(CREATE_CHARACTER_RE, "")

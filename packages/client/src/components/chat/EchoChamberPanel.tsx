@@ -12,6 +12,7 @@ import type { EchoChamberSide } from "../../stores/ui.store";
 import { useAgentConfigs } from "../../hooks/use-agents";
 import { useChatStore } from "../../stores/chat.store";
 import { useChat } from "../../hooks/use-chats";
+import { api } from "../../lib/api-client";
 import { cn } from "../../lib/utils";
 
 const MESSAGE_INTERVAL_MS = 30_000; // 30 s between reveals
@@ -88,6 +89,36 @@ export function EchoChamberPanel() {
   // ── Timed reveal: show one more message every 30 s ──
   const [visibleCount, setVisibleCount] = useState(0);
   const prevLenRef = useRef(echoMessages.length);
+
+  // ── Load persisted echo messages when chat changes ──
+  const setEchoMessages = useAgentStore((s) => s.setEchoMessages);
+  const clearEchoMessages = useAgentStore((s) => s.clearEchoMessages);
+  const loadedChatRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!activeChatId || !echoEnabled) {
+      loadedChatRef.current = null;
+      return;
+    }
+    if (loadedChatRef.current === activeChatId) return;
+
+    // Chat changed — clear old messages and reset reveal
+    clearEchoMessages();
+    setVisibleCount(0);
+    prevLenRef.current = 0;
+    loadedChatRef.current = activeChatId;
+
+    api.get<Array<{ characterName: string; reaction: string; timestamp: number }>>(`/agents/echo-messages/${activeChatId}`)
+      .then((msgs) => {
+        if (msgs.length > 0) {
+          setEchoMessages(msgs);
+          // Show all loaded messages immediately (no stagger for persisted data)
+          setVisibleCount(msgs.length);
+          prevLenRef.current = msgs.length;
+        }
+      })
+      .catch(() => { /* silently ignore load failures */ });
+  }, [activeChatId, echoEnabled, setEchoMessages, clearEchoMessages]);
 
   useEffect(() => {
     if (echoMessages.length < prevLenRef.current) setVisibleCount(0);

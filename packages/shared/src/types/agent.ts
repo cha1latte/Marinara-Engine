@@ -29,7 +29,9 @@ export type AgentResultType =
   | "persona_stats_update"
   | "custom_tracker_update"
   | "chat_summary"
-  | "spotify_control";
+  | "spotify_control"
+  | "haptic_command"
+  | "cyoa_choices";
 
 /** Configuration for a single agent. */
 export interface AgentConfig {
@@ -102,7 +104,7 @@ export interface AgentContext {
     personaStats?: { enabled: boolean; bars: Array<{ name: string; value: number; max: number; color: string }> };
     rpgStats?: {
       enabled: boolean;
-      attributes: Array<{ name: string; value: number; max: number }>;
+      attributes: Array<{ name: string; value: number }>;
       hp: { value: number; max: number };
       mp: { value: number; max: number };
     };
@@ -113,6 +115,8 @@ export interface AgentContext {
   activatedLorebookEntries: Array<{ id: string; name: string; content: string; tag: string }> | null;
   /** All lorebook IDs the agent can write to */
   writableLorebookIds: string[] | null;
+  /** Chat summary text (if any) — helps agents avoid duplicating summarized info */
+  chatSummary: string | null;
   /** Abort signal — when triggered, agent execution should stop. Typed as `any` to avoid DOM/Node lib dependency. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   signal?: any;
@@ -143,6 +147,8 @@ export const BUILT_IN_AGENT_IDS = {
   RESPONSE_ORCHESTRATOR: "response-orchestrator",
   AUTONOMOUS_MESSENGER: "autonomous-messenger",
   CUSTOM_TRACKER: "custom-tracker",
+  HAPTIC: "haptic",
+  CYOA: "cyoa",
 } as const;
 
 export type AgentCategory = "writer" | "tracker" | "misc";
@@ -370,6 +376,24 @@ export const BUILT_IN_AGENTS: BuiltInAgentMeta[] = [
     enabledByDefault: false,
     category: "misc",
   },
+  {
+    id: "haptic",
+    name: "Love Toys Control",
+    description:
+      "Analyzes narrative content and controls connected intimate toys in real time. Requires Intiface Central running locally — connect your toy there first, then enable this agent.",
+    phase: "post_processing",
+    enabledByDefault: false,
+    category: "misc",
+  },
+  {
+    id: "cyoa",
+    name: "CYOA Choices",
+    description:
+      "Generates interactive Choose Your Own Adventure choices after each assistant message. Click a choice to send it as your response. Roleplay mode only.",
+    phase: "post_processing",
+    enabledByDefault: false,
+    category: "writer",
+  },
 ];
 
 /** Recommended default tools for each built-in agent type. */
@@ -403,6 +427,8 @@ export const DEFAULT_AGENT_TOOLS: Record<string, string[]> = {
   "response-orchestrator": [],
   "autonomous-messenger": [],
   "custom-tracker": ["update_game_state"],
+  haptic: [],
+  cyoa: [],
 };
 
 /** Data shape for a lorebook_update agent result. */

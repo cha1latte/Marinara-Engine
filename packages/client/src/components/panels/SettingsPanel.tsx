@@ -1327,11 +1327,49 @@ function ImportSettings() {
     e.target.value = "";
   };
 
+  const handleProfileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const envelope = JSON.parse(text);
+      if (envelope.type !== "marinara_profile") {
+        toast.error("Not a valid profile export file.");
+        return;
+      }
+      const res = await fetch("/api/backup/import-profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: text,
+      });
+      const data = await res.json();
+      if (data.success) {
+        qc.invalidateQueries();
+        const s = data.imported;
+        toast.success(
+          `Imported: ${s.characters} characters, ${s.personas} personas, ${s.lorebooks} lorebooks, ${s.presets} presets, ${s.agents} agents`,
+        );
+      } else {
+        toast.error(`Import failed: ${data.error ?? "Unknown error"}`);
+      }
+    } catch {
+      toast.error("Import failed. Make sure this is a valid profile JSON file.");
+    }
+    e.target.value = "";
+  };
+
   return (
     <div className="flex flex-col gap-3">
       <div className="text-xs text-[var(--muted-foreground)]">
         Import data from Marinara exports, SillyTavern, or other tools.
       </div>
+
+      {/* Profile import */}
+      <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500/20 to-teal-500/20 px-3 py-3 text-xs font-semibold ring-1 ring-emerald-500/30 transition-all hover:ring-emerald-500/50 active:scale-[0.98]">
+        <Download size="1rem" />
+        Import Profile (Full Export)
+        <input type="file" accept=".json" onChange={handleProfileImport} className="hidden" />
+      </label>
 
       {/* Marinara import */}
       <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-pink-500/20 to-orange-500/20 px-3 py-3 text-xs font-semibold ring-1 ring-pink-500/30 transition-all hover:ring-pink-500/50 active:scale-[0.98]">
@@ -1469,6 +1507,27 @@ function AdvancedSettings() {
   const setShowModelName = useUIStore((s) => s.setShowModelName);
   const clearAllData = useClearAllData();
   const [confirmStep, setConfirmStep] = useState(0); // 0=idle, 1=first click, 2=confirmed
+  const [exportingProfile, setExportingProfile] = useState(false);
+
+  const handleExportProfile = async () => {
+    setExportingProfile(true);
+    try {
+      const res = await fetch("/api/backup/export-profile");
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "marinara-profile.json";
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Profile exported!");
+    } catch {
+      toast.error("Failed to export profile");
+    } finally {
+      setExportingProfile(false);
+    }
+  };
 
   const qc = useQueryClient();
   const backupMutation = useMutation({
@@ -1527,7 +1586,7 @@ function AdvancedSettings() {
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-1.5">
           <Download size="0.75rem" className="text-[var(--muted-foreground)]" />
-          <span className="text-xs font-medium">Backup</span>
+          <span className="text-xs font-medium">Backup & Export</span>
           <HelpTooltip text="Create a full backup of your data including all chats, characters, presets, lorebooks, backgrounds, sprites, and more. Backups are saved to the data/backups/ folder." />
         </div>
         <button
@@ -1544,6 +1603,23 @@ function AdvancedSettings() {
             <>
               <Download size="0.8125rem" />
               Create Backup
+            </>
+          )}
+        </button>
+        <button
+          onClick={handleExportProfile}
+          disabled={exportingProfile}
+          className="flex items-center justify-center gap-1.5 rounded-lg bg-[var(--secondary)] px-3 py-2 text-xs font-medium ring-1 ring-[var(--border)] transition-all hover:bg-[var(--secondary)]/80 active:scale-95 disabled:opacity-50"
+        >
+          {exportingProfile ? (
+            <>
+              <Loader2 size="0.8125rem" className="animate-spin" />
+              Exporting…
+            </>
+          ) : (
+            <>
+              <Download size="0.8125rem" />
+              Export Profile (JSON)
             </>
           )}
         </button>
@@ -1635,18 +1711,28 @@ function AdvancedSettings() {
 function ConversationSoundSetting() {
   const convoNotificationSound = useUIStore((s) => s.convoNotificationSound);
   const setConvoNotificationSound = useUIStore((s) => s.setConvoNotificationSound);
+  const rpNotificationSound = useUIStore((s) => s.rpNotificationSound);
+  const setRpNotificationSound = useUIStore((s) => s.setRpNotificationSound);
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-1.5">
         <Volume2 size="0.75rem" className="text-[var(--muted-foreground)]" />
-        <span className="text-xs font-medium">Conversation Sounds</span>
-        <HelpTooltip text="Play a notification ping when you receive a new message in Conversation mode." />
+        <span className="text-xs font-medium">Notification Sounds</span>
+        <HelpTooltip text="Play a notification ping when you receive a new message while on a different chat." />
       </div>
       <ToggleSetting
-        label="Message notification sound"
+        label="Conversation mode"
         checked={convoNotificationSound}
         onChange={(v) => {
           setConvoNotificationSound(v);
+          if (v) playNotificationPing();
+        }}
+      />
+      <ToggleSetting
+        label="Roleplay mode"
+        checked={rpNotificationSound}
+        onChange={(v) => {
+          setRpNotificationSound(v);
           if (v) playNotificationPing();
         }}
       />

@@ -151,6 +151,16 @@ export async function chatsRoutes(app: FastifyInstance) {
     return reply.status(204).send();
   });
 
+  // Bulk delete messages
+  app.post<{ Params: { chatId: string } }>("/:chatId/messages/bulk-delete", async (req, reply) => {
+    const { messageIds } = req.body as { messageIds: string[] };
+    if (!Array.isArray(messageIds) || messageIds.length === 0) {
+      return reply.status(400).send({ error: "messageIds array is required" });
+    }
+    await storage.removeMessages(messageIds, req.params.chatId);
+    return reply.status(204).send();
+  });
+
   // Edit message content
   app.patch<{ Params: { chatId: string; messageId: string } }>("/:chatId/messages/:messageId", async (req, reply) => {
     const { content } = req.body as { content: string };
@@ -194,9 +204,6 @@ export async function chatsRoutes(app: FastifyInstance) {
     const presentCharacters = JSON.parse((row.presentCharacters as string) ?? "[]");
     const playerStats = row.playerStats ? JSON.parse(row.playerStats as string) : null;
     const personaStats = row.personaStats ? JSON.parse(row.personaStats as string) : null;
-    console.log(
-      `[GET /game-state] chatId=${req.params.id} snapshotId=${row.id} msgId=${row.messageId} swipe=${row.swipeIndex} fallback=${usedFallback} chars=${presentCharacters.length} personaStats=${personaStats ? "present" : "null"} playerStats=${playerStats ? "present" : "null"} date=${row.date ?? "null"} location=${row.location ?? "null"}`,
-    );
     return {
       id: row.id,
       chatId: row.chatId,
@@ -645,12 +652,12 @@ export async function chatsRoutes(app: FastifyInstance) {
               if (personaFields.backstory) fieldParts.push(wrapContent(personaFields.backstory, "backstory", wrapFormat, 2));
               if (personaFields.appearance) fieldParts.push(wrapContent(personaFields.appearance, "appearance", wrapFormat, 2));
               if (personaFields.scenario) fieldParts.push(wrapContent(personaFields.scenario, "scenario", wrapFormat, 2));
-              // Include enabled RPG attributes (max values only — current state tracked by agents)
+              // Include enabled RPG attributes
               if (personaStats?.rpgStats?.enabled) {
-                const rpg = personaStats.rpgStats as { attributes: Array<{ name: string; value: number; max: number }>; hp: { value: number; max: number }; mp: { value: number; max: number } };
+                const rpg = personaStats.rpgStats as { attributes: Array<{ name: string; value: number }>; hp: { value: number; max: number }; mp: { value: number; max: number } };
                 const rpgLines = [`Max HP: ${rpg.hp.max}`, `Max MP: ${rpg.mp.max}`];
                 for (const attr of rpg.attributes) {
-                  rpgLines.push(`${attr.name}: ${attr.max}`);
+                  rpgLines.push(`${attr.name}: ${attr.value}`);
                 }
                 fieldParts.push(wrapContent(rpgLines.join("\n"), "rpg_attributes", wrapFormat, 2));
               }

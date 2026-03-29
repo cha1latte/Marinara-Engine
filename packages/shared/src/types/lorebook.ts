@@ -80,6 +80,8 @@ export interface LorebookEntry {
   cooldown: number | null;
   /** Delay N messages before first activation */
   delay: number | null;
+  /** Activations remaining before auto-disable (null = unlimited) */
+  ephemeral: number | null;
 
   // ── Grouping ──
   group: string;

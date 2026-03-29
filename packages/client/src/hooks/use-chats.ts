@@ -1,8 +1,9 @@
 // ──────────────────────────────────────────────
 // React Query: Chat hooks
 // ──────────────────────────────────────────────
-import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { api } from "../lib/api-client";
+import { useChatStore } from "../stores/chat.store";
 import type { Chat, Message, MessageSwipe } from "@marinara-engine/shared";
 
 export const chatKeys = {
@@ -164,14 +165,55 @@ export function useDeleteMessage(chatId: string | null) {
   });
 }
 
+export function useDeleteMessages(chatId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (messageIds: string[]) =>
+      api.post(`/chats/${chatId}/messages/bulk-delete`, { messageIds }),
+    onSuccess: () => {
+      if (chatId) {
+        qc.invalidateQueries({ queryKey: chatKeys.messages(chatId) });
+      }
+    },
+  });
+}
+
 /** Edit a message's content */
 export function useUpdateMessage(chatId: string | null) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ messageId, content }: { messageId: string; content: string }) =>
       api.patch<Message>(`/chats/${chatId}/messages/${messageId}`, { content }),
-    onSuccess: () => {
+    onMutate: async ({ messageId, content }) => {
+      if (!chatId) return;
+      // Cancel in-flight refetches (e.g. from generation events) so they
+      // don't overwrite the optimistic value with stale server data.
+      await qc.cancelQueries({ queryKey: chatKeys.messages(chatId) });
+      const previous = qc.getQueryData<InfiniteData<Message[]>>(chatKeys.messages(chatId));
+      qc.setQueryData<InfiniteData<Message[]>>(chatKeys.messages(chatId), (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page) =>
+            page.map((msg) => (msg.id === messageId ? { ...msg, content } : msg)),
+          ),
+        };
+      });
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (chatId && context?.previous) {
+        qc.setQueryData(chatKeys.messages(chatId), context.previous);
+      }
+    },
+    onSettled: () => {
       if (chatId) {
+        // Skip invalidation while this chat is actively streaming — a refetch
+        // could pick up the just-saved assistant message while the streaming
+        // overlay is still visible, causing the response to appear doubled.
+        // The generation's finally block will invalidate after streaming ends.
+        const { streamingChatId, isStreaming } = useChatStore.getState();
+        if (isStreaming && streamingChatId === chatId) return;
         qc.invalidateQueries({ queryKey: chatKeys.messages(chatId) });
       }
     },

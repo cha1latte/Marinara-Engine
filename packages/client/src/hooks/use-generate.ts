@@ -18,7 +18,7 @@ import { useUIStore } from "../stores/ui.store";
 import { chatKeys } from "./use-chats";
 import { characterKeys } from "./use-characters";
 import { playNotificationPing } from "../lib/notification-sound";
-import type { Message } from "@marinara-engine/shared";
+import type { Chat, Message } from "@marinara-engine/shared";
 
 /**
  * Hook that handles streaming generation.
@@ -42,6 +42,8 @@ export function useGenerate() {
   const clearThoughtBubbles = useAgentStore((s) => s.clearThoughtBubbles);
   const addEchoMessage = useAgentStore((s) => s.addEchoMessage);
   const clearEchoMessages = useAgentStore((s) => s.clearEchoMessages);
+  const setCyoaChoices = useAgentStore((s) => s.setCyoaChoices);
+  const clearCyoaChoices = useAgentStore((s) => s.clearCyoaChoices);
   const setFailedAgentTypes = useAgentStore((s) => s.setFailedAgentTypes);
   const clearFailedAgentTypes = useAgentStore((s) => s.clearFailedAgentTypes);
   const addDebugEntry = useAgentStore((s) => s.addDebugEntry);
@@ -91,6 +93,7 @@ export function useGenerate() {
         clearStreamBuffer();
         clearThoughtBubbles();
         clearEchoMessages();
+        clearCyoaChoices();
         clearFailedAgentTypes();
         clearDebugLog();
         setRegenerateMessageId(params.regenerateMessageId ?? null);
@@ -394,6 +397,15 @@ export function useGenerate() {
                     addEchoMessage(r.characterName, r.reaction);
                   }
                 }
+
+                // Push CYOA choices to the dedicated store
+                if (result.agentType === "cyoa") {
+                  const d = result.data as Record<string, unknown>;
+                  const choices = (d.choices as Array<{ label: string; text: string }>) ?? [];
+                  if (choices.length > 0) {
+                    setCyoaChoices(choices);
+                  }
+                }
               }
 
               // Apply background change — validate filename exists before applying
@@ -541,7 +553,13 @@ export function useGenerate() {
                 const activeNow = useChatStore.getState().activeChatId;
                 if (activeNow !== params.chatId) {
                   useChatStore.getState().incrementUnread(params.chatId);
-                  if (useUIStore.getState().convoNotificationSound) {
+                  const chatList = qc.getQueryData<Chat[]>(chatKeys.list());
+                  const thisChat = chatList?.find((c) => c.id === params.chatId);
+                  const isRpMode = thisChat?.mode === "roleplay" || thisChat?.mode === "visual_novel";
+                  const soundOn = isRpMode
+                    ? useUIStore.getState().rpNotificationSound
+                    : useUIStore.getState().convoNotificationSound;
+                  if (soundOn) {
                     playNotificationPing();
                   }
                 }
@@ -692,6 +710,16 @@ export function useGenerate() {
               break;
             }
 
+            case "haptic_command": {
+              const hapData = event.data as { action?: string; intensity?: number; duration?: number; commands?: unknown[]; reasoning?: string };
+              if (hapData.commands) {
+                console.log(`[haptic] Agent sent ${(hapData.commands as unknown[]).length} command(s): ${hapData.reasoning ?? ""}`);
+              } else {
+                console.log(`[haptic] ${hapData.action} intensity=${hapData.intensity ?? "?"} duration=${hapData.duration ?? "indefinite"}`);
+              }
+              break;
+            }
+
             case "assistant_action": {
               const actionData = event.data as { action: string; [key: string]: unknown };
               if (actionData.action === "persona_created") {
@@ -815,7 +843,13 @@ export function useGenerate() {
         const currentActive = useChatStore.getState().activeChatId;
         if (receivedContent && currentActive !== params.chatId) {
           useChatStore.getState().incrementUnread(params.chatId);
-          if (useUIStore.getState().convoNotificationSound) {
+          const chatList = qc.getQueryData<Chat[]>(chatKeys.list());
+          const chat = chatList?.find((c) => c.id === params.chatId);
+          const isRp = chat?.mode === "roleplay" || chat?.mode === "visual_novel";
+          const soundEnabled = isRp
+            ? useUIStore.getState().rpNotificationSound
+            : useUIStore.getState().convoNotificationSound;
+          if (soundEnabled) {
             playNotificationPing();
           }
         }
@@ -864,6 +898,8 @@ export function useGenerate() {
       clearThoughtBubbles,
       addEchoMessage,
       clearEchoMessages,
+      setCyoaChoices,
+      clearCyoaChoices,
       clearFailedAgentTypes,
       setFailedAgentTypes,
       addDebugEntry,

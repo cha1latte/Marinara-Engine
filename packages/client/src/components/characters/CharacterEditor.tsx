@@ -336,9 +336,9 @@ export function CharacterEditor() {
       )}
 
       {/* ── Body: Tabs + Content ── */}
-      <div className="flex flex-1 overflow-hidden max-md:flex-col">
+      <div className="flex flex-1 overflow-hidden max-lg:flex-col">
         {/* Tab Rail */}
-        <nav className="flex w-44 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-[var(--border)] bg-[var(--card)] p-2 max-md:w-full max-md:flex-row max-md:overflow-x-auto max-md:border-r-0 max-md:border-b max-md:p-1.5">
+        <nav className="flex w-44 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-[var(--border)] bg-[var(--card)] p-2 max-lg:w-full max-lg:flex-row max-lg:overflow-x-auto max-lg:border-r-0 max-lg:border-b max-lg:p-1.5">
           {TABS.map((tab) => {
             const Icon = tab.icon;
             return (
@@ -346,7 +346,7 @@ export function CharacterEditor() {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  "flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition-all text-left max-md:whitespace-nowrap max-md:px-2.5 max-md:py-1.5",
+                  "flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition-all text-left max-lg:whitespace-nowrap max-lg:px-2.5 max-lg:py-1.5",
                   activeTab === tab.id
                     ? "bg-gradient-to-r from-pink-400/15 to-purple-500/15 text-[var(--primary)] ring-1 ring-[var(--primary)]/20"
                     : "text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]",
@@ -360,7 +360,7 @@ export function CharacterEditor() {
         </nav>
 
         {/* Tab Content */}
-        <div className="flex-1 overflow-y-auto p-6 max-md:p-4">
+        <div className="flex-1 overflow-y-auto p-6 max-lg:p-4">
           <div className="mx-auto max-w-2xl">
             {activeTab === "metadata" && (
               <MetadataTab
@@ -1257,7 +1257,7 @@ function SpritesTab({ characterId }: { characterId: string }) {
                 <img src={sprite.url} alt={sprite.expression} loading="lazy" className="h-full w-full object-contain" />
               </div>
               <div className="flex items-center justify-between p-2">
-                <span className="text-[0.6875rem] font-medium capitalize">{sprite.expression}</span>
+                <span className="max-w-[10rem] truncate text-[0.6875rem] font-medium capitalize" title={sprite.expression}>{sprite.expression}</span>
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 max-md:opacity-100 transition-opacity">
                   <button
                     onClick={() => startUpload(sprite.expression)}
@@ -1315,12 +1315,12 @@ function SpritesTab({ characterId }: { characterId: string }) {
 const DEFAULT_RPG_STATS: RPGStatsConfig = {
   enabled: false,
   attributes: [
-    { name: "STR", value: 10, max: 20 },
-    { name: "DEX", value: 10, max: 20 },
-    { name: "CON", value: 10, max: 20 },
-    { name: "INT", value: 10, max: 20 },
-    { name: "WIS", value: 10, max: 20 },
-    { name: "CHA", value: 10, max: 20 },
+    { name: "STR", value: 10 },
+    { name: "DEX", value: 10 },
+    { name: "CON", value: 10 },
+    { name: "INT", value: 10 },
+    { name: "WIS", value: 10 },
+    { name: "CHA", value: 10 },
   ],
   hp: { value: 100, max: 100 },
   mp: { value: 50, max: 50 },
@@ -1346,7 +1346,7 @@ function StatsTab({
   };
 
   const addAttribute = () => {
-    update({ attributes: [...stats.attributes, { name: "NEW", value: 10, max: 20 }] });
+    update({ attributes: [...stats.attributes, { name: "NEW", value: 10 }] });
   };
 
   const removeAttribute = (index: number) => {
@@ -1446,20 +1446,6 @@ function StatsTab({
                     onChange={(e) => updateAttribute(i, "value", parseInt(e.target.value) || 0)}
                     className="w-16 rounded-lg border border-[var(--border)] bg-[var(--input)] px-2 py-1 text-center text-xs"
                   />
-                  <span className="text-[0.625rem] text-[var(--muted-foreground)]">/</span>
-                  <input
-                    type="number"
-                    value={attr.max}
-                    onChange={(e) => updateAttribute(i, "max", parseInt(e.target.value) || 1)}
-                    className="w-16 rounded-lg border border-[var(--border)] bg-[var(--input)] px-2 py-1 text-center text-xs"
-                  />
-                  {/* Mini bar */}
-                  <div className="flex-1 h-1.5 overflow-hidden rounded-full bg-black/30">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-purple-600 to-purple-400 transition-all"
-                      style={{ width: `${Math.min(100, (attr.value / Math.max(1, attr.max)) * 100)}%` }}
-                    />
-                  </div>
                   <button
                     onClick={() => removeAttribute(i)}
                     className="rounded-lg p-1 text-[var(--muted-foreground)] transition-colors hover:bg-red-500/15 hover:text-red-400"

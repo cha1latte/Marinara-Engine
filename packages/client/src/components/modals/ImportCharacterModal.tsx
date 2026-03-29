@@ -42,11 +42,26 @@ export function ImportCharacterModal({ open, onClose }: Props) {
         json = JSON.parse(text);
       }
 
-      const res = await fetch("/api/import/st-character", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...json, _avatarDataUrl: avatarDataUrl }),
-      });
+      // Detect Marinara envelope format and route to the native importer
+      const isMarinaraEnvelope =
+        json.version === 1 &&
+        typeof json.type === "string" &&
+        (json.type as string).startsWith("marinara_");
+
+      let res: Response;
+      if (isMarinaraEnvelope) {
+        res = await fetch("/api/import/marinara", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(json),
+        });
+      } else {
+        res = await fetch("/api/import/st-character", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...json, _avatarDataUrl: avatarDataUrl }),
+        });
+      }
       const data = await res.json();
       if (data.success) {
         setStatus("success");
@@ -108,7 +123,7 @@ export function ImportCharacterModal({ open, onClose }: Props) {
           />
           <div className="text-center">
             <p className="text-sm font-medium">Drop a file here or click to browse</p>
-            <p className="mt-1 text-xs text-[var(--muted-foreground)]">Supports JSON and PNG (with embedded data)</p>
+            <p className="mt-1 text-xs text-[var(--muted-foreground)]">Supports JSON, PNG (with embedded data), and Marinara exports</p>
           </div>
           <div className="flex gap-2">
             <span className="flex items-center gap-1 rounded-full bg-[var(--secondary)] px-2.5 py-1 text-xs text-[var(--muted-foreground)]">
@@ -117,13 +132,16 @@ export function ImportCharacterModal({ open, onClose }: Props) {
             <span className="flex items-center gap-1 rounded-full bg-[var(--secondary)] px-2.5 py-1 text-xs text-[var(--muted-foreground)]">
               <Image size="0.75rem" /> .png
             </span>
+            <span className="flex items-center gap-1 rounded-full bg-[var(--secondary)] px-2.5 py-1 text-xs text-[var(--muted-foreground)]">
+              <FileJson size="0.75rem" /> .marinara
+            </span>
           </div>
         </div>
 
         <input
           ref={fileRef}
           type="file"
-          accept=".json,.png"
+          accept=".json,.png,.marinara"
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];

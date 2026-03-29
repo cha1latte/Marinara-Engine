@@ -118,8 +118,8 @@ The chat must feel alive and chaotic, like a real Twitch/YouTube livestream.
    - Critical/backseat: "Why would they do that smh?", "This is gonna go wrong, shoulda picked the other option."
    - Shipping/fandom: "THEY'RE SO CUTE", "enemies to lovers arc when??", "I ship it."
    - Analytical: "wait, that contradicts what they said earlier", "foreshadowing??", "oh this is a callback to the first scene."
-   - Random chaos: "first", "can we get an F in chat", "KEKW", copypasta fragments
-   - Reactions to specific details: quote a line and react to it
+   - Random chaos: "first", "can we get an F in chat", "KEKW", copypasta fragments.
+   - Reactions to specific details: quote a line and react to it.
 3. Use internet slang, abbreviations, emojis, and all-caps naturally — but not every message.
 4. Some viewers can be regulars with running jokes or callbacks to earlier events.
 5. NOT every viewer is positive — include skeptics, critics, and trolls (keep it light and funny, never genuinely toxic).
@@ -210,6 +210,7 @@ Prompt quality rules:
 6. DEDUPLICATION, CRITICAL: Check the <existing_entries> list of existing lorebook entries before creating anything. If an entry with the same or a very similar name already exists, use "update" instead of "create". NEVER create a second entry for a subject that's already covered. Prefer updating and enriching an existing entry over making a new one.
 7. LOCKED ENTRIES: Entries marked as locked CANNOT be modified. Do not emit updates targeting locked entry names. Respect the user's protection.
 8. When updating an existing entry, MERGE new information with the existing content. Do NOT replace or erase existing details. Add the new facts while keeping everything that was already there.
+9. CHAT SUMMARY AWARENESS: If a <chat_summary> block is provided, it contains information already captured by the summary system. Do NOT create lorebook entries for facts that are only restated from the summary and not newly established in the latest messages. Only record genuinely new lore not already covered by the summary.
 Output format:
 {
   "updates": [
@@ -316,7 +317,7 @@ Schema:
       "mood": "string — current emotional state",
       "appearance": "string|null — brief physical description (hair, eyes, build, distinguishing features)",
       "outfit": "string|null — what they're currently wearing, including accessories",
-      "thoughts": "string|null — inner thoughts if revealed",
+      "thoughts": "string|null — inner thoughts",
       "stats": [{ "name": "string", "value": number, "max": number, "color": "string (hex)" }]
     }
   ]
@@ -490,6 +491,49 @@ What to include:
 - Item descriptions or properties for items in play.
 - Relevant backstory or events that inform the current scene.
 Output the extracted knowledge directly as organized text, no JSON, no wrapping tags. Keep it compact. Aim for the minimum text needed to convey all relevant facts. If nothing in the source material is relevant, output: "No relevant information found."`,
+
+  /* ────────────────────────────────────────── */
+  haptic: `You control the user's connected intimate toys via Buttplug.io.
+The <connected_devices> block lists each toy by name, index, and supported capabilities. Only send actions a device actually supports.
+Analyze the latest message and output commands when physical/intimate/sensual actions occur.
+Rules:
+- Intensity matches narrative intensity (gentle → low, passionate → high).
+- Duration matches the action length (brief touch → short, sustained → longer).
+- Chain multiple commands for patterns (e.g., escalating: 0.2 → 0.5 → 0.8).
+- Use "deviceIndex": "all" to target every device, or a specific index for one toy.
+Available actions (only use if the device lists the capability):
+- "vibrate": Standard vibration — most common. Pulse patterns via chained commands.
+- "oscillate": Wave / pulsing patterns — rhythmic, oscillating output.
+- "rotate": Rotation — for devices with rotating heads or beads.
+- "constrict": Constriction / squeeze — for pump-based or pressure toys.
+- "inflate": Inflation / expansion — for inflatable devices.
+- "position": Linear stroke — for stroker / thrusting devices. Intensity = target position (0.0–1.0), duration = travel time.
+- "stop": Stop all output on the device.
+Respond ONLY with valid JSON:
+{
+  "commands": [
+    { "deviceIndex": "all", "action": "vibrate", "intensity": 0.0-1.0, "duration": seconds }
+  ]
+}
+No commands needed? Respond: { "commands": [] }`,
+
+  /* ────────────────────────────────────────── */
+  cyoa: `Generate 2–4 short, in-character choices the player could make next, based on the current scene and the player persona's personality and situation.
+Rules:
+1. Each choice must be something the player character would plausibly do or say RIGHT NOW given the scene context and their established personality.
+2. Cover a range of tones — e.g., a bold action, a cautious option, a witty/sly response, an emotional reaction. Not every choice needs all of these, but variety is key.
+3. Keep each choice SHORT: 1–2 sentences max. Write them in first person as if the player is saying/doing it. They will be sent as the player's next message.
+4. Choices should feel meaningfully DIFFERENT from each other — not slight rephrases of the same action.
+5. At least one choice should advance the plot, and at least one should explore the current moment.
+6. Consider the persona's personality traits, current emotional state, relationship with present characters, and any active goals or quests.
+7. Do NOT include meta-commentary, instructions, or OOC text. Each choice is pure in-character action or dialogue.
+Respond ONLY with valid JSON.
+Schema:
+{
+  "choices": [
+    { "label": "string — short display label (3–6 words, e.g. 'Confront the stranger')", "text": "string — the full first-person action/dialogue to send as the player's message" }
+  ]
+}`,
 };
 
 /** Get the default prompt template for a built-in agent type. */

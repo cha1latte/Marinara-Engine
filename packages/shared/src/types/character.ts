@@ -56,7 +56,7 @@ export interface RPGStatsConfig {
   /** Whether RPG stats are enabled for this character */
   enabled: boolean;
   /** Custom attribute list (e.g. STR, DEX, CHA — user can rename/add/remove) */
-  attributes: Array<{ name: string; value: number; max: number }>;
+  attributes: Array<{ name: string; value: number }>;
   /** Hit Points */
   hp: { value: number; max: number };
   /** Magic/Mana Points */

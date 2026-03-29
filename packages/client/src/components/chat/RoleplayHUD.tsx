@@ -86,6 +86,7 @@ export function RoleplayHUD({
   const isAgentProcessing = useAgentStore((s) => s.isProcessing);
   const dismissThoughtBubble = useAgentStore((s) => s.dismissThoughtBubble);
   const clearThoughtBubbles = useAgentStore((s) => s.clearThoughtBubbles);
+  const resetAgentStore = useAgentStore((s) => s.reset);
 
   useEffect(() => {
     if (!chatId) return;
@@ -216,7 +217,10 @@ export function RoleplayHUD({
       } as GameState);
     }
     api.patch(`/chats/${chatId}/game-state`, cleared).catch(() => {});
-  }, [chatId, setGameState]);
+    // Clear committed agent runs & memory from DB + reset client state
+    api.delete(`/agents/runs/${chatId}`).catch(() => {});
+    resetAgentStore();
+  }, [chatId, setGameState, resetAgentStore]);
 
   const date = gameState?.date ?? null;
   const time = gameState?.time ?? null;
@@ -467,8 +471,9 @@ function ActionsGroup({
     };
   }, [agentsOpen, setAgentsOpen]);
 
-  // Badge count — total thought bubbles + echo messages
-  const badgeCount = thoughtBubbles.length + echoMessages.length;
+  // Badge count — unique agent types that produced results
+  const uniqueAgentCount = new Set(thoughtBubbles.map((b) => b.agentId)).size;
+  const badgeCount = uniqueAgentCount + (echoMessages.length > 0 ? 1 : 0);
 
   // ── Shared dropdown portal (used by both desktop & mobile) ──
   const dropdownContent =
@@ -494,7 +499,7 @@ function ActionsGroup({
           <>
             <div className="flex items-center justify-between border-b border-white/5 px-3 py-1.5">
               <span className="text-[0.625rem] text-white/40">
-                {thoughtBubbles.length} result{thoughtBubbles.length !== 1 ? "s" : ""}
+                {uniqueAgentCount} agent{uniqueAgentCount !== 1 ? "s" : ""} triggered
               </span>
               <button
                 onClick={clearThoughtBubbles}

@@ -328,9 +328,9 @@ export function PersonaEditor() {
       )}
 
       {/* ── Body: Tabs + Content ── */}
-      <div className="flex flex-1 overflow-hidden max-md:flex-col">
+      <div className="flex flex-1 overflow-hidden max-lg:flex-col">
         {/* Tab Rail */}
-        <nav className="flex w-44 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-[var(--border)] bg-[var(--card)] p-2 max-md:w-full max-md:flex-row max-md:overflow-x-auto max-md:border-r-0 max-md:border-b max-md:p-1.5">
+        <nav className="flex w-44 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-[var(--border)] bg-[var(--card)] p-2 max-lg:w-full max-lg:flex-row max-lg:overflow-x-auto max-lg:border-r-0 max-lg:border-b max-lg:p-1.5">
           {TABS.map((tab) => {
             const Icon = tab.icon;
             return (
@@ -338,7 +338,7 @@ export function PersonaEditor() {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  "flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition-all text-left max-md:whitespace-nowrap max-md:px-2.5 max-md:py-1.5",
+                  "flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition-all text-left max-lg:whitespace-nowrap max-lg:px-2.5 max-lg:py-1.5",
                   activeTab === tab.id
                     ? "bg-gradient-to-r from-emerald-400/15 to-teal-500/15 text-emerald-400 ring-1 ring-emerald-400/20"
                     : "text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]",
@@ -352,7 +352,7 @@ export function PersonaEditor() {
         </nav>
 
         {/* Tab Content */}
-        <div className="flex-1 overflow-y-auto p-6 max-md:p-4">
+        <div className="flex-1 overflow-y-auto p-6 max-lg:p-4">
           <div className="mx-auto max-w-2xl">
             {activeTab === "description" && (
               <DescriptionTab formData={formData} updateField={updateField} setDirty={setDirty} />
@@ -508,7 +508,6 @@ interface PersonaStatBar {
 interface PersonaRPGAttribute {
   name: string;
   value: number;
-  max: number;
 }
 
 interface PersonaRPGStats {
@@ -527,12 +526,12 @@ interface PersonaStatsData {
 const DEFAULT_RPG_STATS: PersonaRPGStats = {
   enabled: false,
   attributes: [
-    { name: "STR", value: 10, max: 20 },
-    { name: "DEX", value: 10, max: 20 },
-    { name: "CON", value: 10, max: 20 },
-    { name: "INT", value: 10, max: 20 },
-    { name: "WIS", value: 10, max: 20 },
-    { name: "CHA", value: 10, max: 20 },
+    { name: "STR", value: 10 },
+    { name: "DEX", value: 10 },
+    { name: "CON", value: 10 },
+    { name: "INT", value: 10 },
+    { name: "WIS", value: 10 },
+    { name: "CHA", value: 10 },
   ],
   hp: { value: 100, max: 100 },
   mp: { value: 50, max: 50 },
@@ -598,7 +597,7 @@ function PersonaStatsTab({
   };
 
   const addRpgAttribute = () => {
-    updateRpg({ attributes: [...rpgStats.attributes, { name: "NEW", value: 10, max: 20 }] });
+    updateRpg({ attributes: [...rpgStats.attributes, { name: "NEW", value: 10 }] });
   };
 
   const removeRpgAttribute = (index: number) => {
@@ -793,19 +792,6 @@ function PersonaStatsTab({
                       onChange={(e) => updateRpgAttribute(i, "value", parseInt(e.target.value) || 0)}
                       className="w-16 rounded-lg border border-[var(--border)] bg-[var(--input)] px-2 py-1 text-center text-xs"
                     />
-                    <span className="text-[0.625rem] text-[var(--muted-foreground)]">/</span>
-                    <input
-                      type="number"
-                      value={attr.max}
-                      onChange={(e) => updateRpgAttribute(i, "max", parseInt(e.target.value) || 1)}
-                      className="w-16 rounded-lg border border-[var(--border)] bg-[var(--input)] px-2 py-1 text-center text-xs"
-                    />
-                    <div className="flex-1 h-1.5 overflow-hidden rounded-full bg-black/30">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-purple-600 to-purple-400 transition-all"
-                        style={{ width: `${Math.min(100, (attr.value / Math.max(1, attr.max)) * 100)}%` }}
-                      />
-                    </div>
                     <button
                       onClick={() => removeRpgAttribute(i)}
                       className="rounded-lg p-1 text-[var(--muted-foreground)] transition-colors hover:bg-red-500/15 hover:text-red-400"

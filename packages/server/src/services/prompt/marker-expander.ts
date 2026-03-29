@@ -156,14 +156,14 @@ function getCharacterField(data: CharacterData, field: string): string {
   }
 }
 
-/** Format RPG stats into a readable block (max values only — current state is tracked by agents). */
+/** Format RPG stats into a readable block for the prompt. */
 function formatRPGStats(rpgStats: RPGStatsConfig | undefined): string {
   if (!rpgStats?.enabled) return "";
   const lines: string[] = [];
   lines.push(`Max HP: ${rpgStats.hp.max}`);
   lines.push(`Max MP: ${rpgStats.mp.max}`);
   if (rpgStats.attributes.length > 0) {
-    lines.push(rpgStats.attributes.map((a) => `${a.name}: ${a.max}`).join(", "));
+    lines.push(rpgStats.attributes.map((a) => `${a.name}: ${a.value}`).join(", "));
   }
   return lines.join("\n");
 }

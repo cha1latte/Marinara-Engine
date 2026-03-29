@@ -68,6 +68,13 @@ export function useBackgroundAutonomousPolling() {
     const poll = async () => {
       if (!mountedRef.current) return;
 
+      // Skip API calls while tab is hidden to prevent a burst of requests on return.
+      // Server-side inactivity tracking is unaffected; the next visible poll picks up correctly.
+      if (document.hidden) {
+        schedulePoll();
+        return;
+      }
+
       const activeChatId = useChatStore.getState().activeChatId;
 
       // Fetch the current chat list directly from the API each tick.
@@ -209,8 +216,8 @@ export function useBackgroundAutonomousPolling() {
       pollTimerRef.current = setTimeout(poll, 30_000);
     };
 
-    // Start polling after a short initial delay
-    pollTimerRef.current = setTimeout(poll, 15_000);
+    // Start polling after an initial delay (staggered from active autonomous polling at 10s)
+    pollTimerRef.current = setTimeout(poll, 20_000);
 
     return () => {
       mountedRef.current = false;

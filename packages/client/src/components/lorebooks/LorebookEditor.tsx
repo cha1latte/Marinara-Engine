@@ -89,7 +89,17 @@ export function LorebookEditor() {
 
   const lorebook = rawLorebook as Lorebook | undefined;
   const entries = useMemo(() => (rawEntries ?? []) as LorebookEntry[], [rawEntries]);
-  const characters = (rawCharacters ?? []) as Array<{ id: string; name: string }>;
+  const characters = useMemo(() => {
+    if (!rawCharacters) return [] as Array<{ id: string; name: string }>;
+    return (rawCharacters as Array<{ id: string; data: string | Record<string, unknown> }>).map((c) => {
+      try {
+        const parsed = typeof c.data === "string" ? JSON.parse(c.data) : c.data;
+        return { id: c.id, name: parsed?.name ?? "Unknown" };
+      } catch {
+        return { id: c.id, name: "Unknown" };
+      }
+    });
+  }, [rawCharacters]);
 
   const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
@@ -233,6 +243,7 @@ export function LorebookEditor() {
         sticky: entryForm.sticky,
         cooldown: entryForm.cooldown,
         delay: entryForm.delay,
+        ephemeral: entryForm.ephemeral,
         group: entryForm.group,
         tag: entryForm.tag,
         locked: entryForm.locked,
@@ -491,9 +502,9 @@ export function LorebookEditor() {
             <FieldGroup
               label="Timing"
               icon={Settings2}
-              help="Sticky = stays active for N messages after triggering. Cooldown = waits N messages before it can trigger again. Delay = waits N messages before first activation."
+              help="Sticky = stays active for N messages after triggering. Cooldown = waits N messages before it can trigger again. Delay = waits N messages before first activation. Ephemeral = auto-disables after N activations (0 = unlimited)."
             >
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <NumberField
                   label="Sticky"
                   value={entryForm.sticky ?? 0}
@@ -510,6 +521,12 @@ export function LorebookEditor() {
                   label="Delay"
                   value={entryForm.delay ?? 0}
                   onChange={(v) => setEntryForm((f) => (f ? { ...f, delay: v || null } : f))}
+                  min={0}
+                />
+                <NumberField
+                  label="Ephemeral"
+                  value={entryForm.ephemeral ?? 0}
+                  onChange={(v) => setEntryForm((f) => (f ? { ...f, ephemeral: v || null } : f))}
                   min={0}
                 />
               </div>
@@ -633,9 +650,9 @@ export function LorebookEditor() {
       </div>
 
       {/* Body: Side-tabs + Content */}
-      <div className="flex flex-1 overflow-hidden max-md:flex-col">
+      <div className="flex flex-1 overflow-hidden max-lg:flex-col">
         {/* Tab Rail */}
-        <nav className="flex w-44 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-[var(--border)] bg-[var(--card)] p-2 max-md:w-full max-md:flex-row max-md:overflow-x-auto max-md:border-r-0 max-md:border-b max-md:p-1.5">
+        <nav className="flex w-44 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-[var(--border)] bg-[var(--card)] p-2 max-lg:w-full max-lg:flex-row max-lg:overflow-x-auto max-lg:border-r-0 max-lg:border-b max-lg:p-1.5">
           {TABS.map((tab) => {
             const Icon = tab.icon;
             return (
@@ -643,7 +660,7 @@ export function LorebookEditor() {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  "flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition-all text-left max-md:whitespace-nowrap max-md:px-2.5 max-md:py-1.5",
+                  "flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition-all text-left max-lg:whitespace-nowrap max-lg:px-2.5 max-lg:py-1.5",
                   activeTab === tab.id
                     ? "bg-gradient-to-r from-amber-400/15 to-orange-500/15 text-amber-400 ring-1 ring-amber-400/20"
                     : "text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]",
@@ -652,7 +669,7 @@ export function LorebookEditor() {
                 <Icon size="0.875rem" />
                 {tab.label}
                 {tab.id === "entries" && (
-                  <span className="ml-auto rounded-full bg-[var(--secondary)] px-1.5 py-0.5 text-[0.625rem] max-md:ml-1">
+                  <span className="ml-auto rounded-full bg-[var(--secondary)] px-1.5 py-0.5 text-[0.625rem] max-lg:ml-1">
                     {entries.length}
                   </span>
                 )}
@@ -662,7 +679,7 @@ export function LorebookEditor() {
         </nav>
 
         {/* Tab Content */}
-        <div className="flex-1 overflow-y-auto p-6 max-md:p-4">
+        <div className="flex-1 overflow-y-auto p-6 max-lg:p-4">
           <div className="mx-auto max-w-3xl">
             {activeTab === "overview" && (
               <div className="space-y-6">
@@ -782,7 +799,7 @@ export function LorebookEditor() {
                 </div>
 
                 {/* Scan settings */}
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                   <div>
                     <label className="mb-1.5 flex items-center gap-1 text-xs font-medium">
                       Scan Depth{" "}

@@ -40,7 +40,7 @@ export const PROVIDERS: Record<APIProvider, ProviderDefinition> = {
     defaultBaseUrl: "https://generativelanguage.googleapis.com/v1beta",
     modelsEndpoint: "/models",
     supportsStreaming: true,
-    usesAuthHeader: true,
+    usesAuthHeader: false,
     apiKeyHeader: "x-goog-api-key",
   },
   mistral: {

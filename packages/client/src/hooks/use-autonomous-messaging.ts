@@ -88,6 +88,13 @@ export function useAutonomousMessaging(
     if (!chatId || !enabled) return;
 
     const poll = async () => {
+      // Skip API calls while tab is hidden to prevent a burst of requests on return.
+      // Server-side inactivity tracking is unaffected; the next visible poll picks up correctly.
+      if (document.hidden) {
+        schedulePoll();
+        return;
+      }
+
       // Don't poll if already generating or streaming this chat
       if (generatingRef.current || useChatStore.getState().abortControllers.has(chatId)) {
         schedulePoll();

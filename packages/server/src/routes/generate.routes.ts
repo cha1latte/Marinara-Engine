@@ -49,6 +49,7 @@ import {
   type MemoryCommand,
   type InfluenceCommand,
   type SceneCommand,
+  type HapticCommand,
   type CreatePersonaCommand,
   type CreateCharacterCommand,
   type CreateChatCommand,
@@ -516,7 +517,7 @@ export async function generateRoutes(app: FastifyInstance) {
               }
             })(),
             chatMessages: mappedMessages,
-            chatSummary: (chatMeta.summary as string) ?? null,
+            chatSummary: ((chatMeta.summary as string) ?? "").trim() || null,
             enableAgents: chatEnableAgents,
             activeAgentIds: chatActiveAgentIds,
             activeLorebookIds: chatActiveLorebookIds,
@@ -976,6 +977,32 @@ export async function generateRoutes(app: FastifyInstance) {
               `   IMPORTANT: Only use this when the moment genuinely calls for an immersive scene. Don't overuse it.`,
               ``,
             );
+          }
+
+          // Haptic command — only when devices are connected and haptic feedback is enabled
+          const hapticEnabled = chatMeta.enableHapticFeedback === true;
+          if (hapticEnabled) {
+            const { hapticService } = await import("../services/haptic/buttplug-service.js");
+            if (hapticService.connected && hapticService.devices.length > 0) {
+              const hapticNum =
+                1 +
+                1 +
+                (crossPostTargets.length > 0 ? 1 : 0) +
+                (hasImageGen ? 1 : 0) +
+                (memoryTargetNames.length > 0 ? 1 : 0) +
+                (chatMode === "conversation" ? 1 : 0);
+              const deviceNames = hapticService.devices.map((d) => d.name).join(", ");
+              commandLines.push(
+                `${hapticNum}. HAPTIC — Control the user's connected intimate device(s) (${deviceNames}). Use this during physical/intimate/sensual moments to provide haptic feedback that matches the narrative. Vary intensity based on the scene.`,
+                `   Format: [haptic: action="vibrate", intensity=0.5, duration=3]`,
+                `   Actions: vibrate, oscillate, rotate, position, stop`,
+                `   intensity: 0.0 (off) to 1.0 (max). duration: seconds (0 = until next command).`,
+                `   You can include multiple [haptic] commands in one message for patterns (e.g., escalating: 0.2 → 0.5 → 0.8).`,
+                `   Use [haptic: action="stop"] to stop all output.`,
+                `   Example: *trails a finger slowly down your arm* [haptic: action="vibrate", intensity=0.3, duration=2]`,
+                ``,
+              );
+            }
           }
 
           commandLines.push(
@@ -1459,14 +1486,14 @@ export async function generateRoutes(app: FastifyInstance) {
             },
             wrapFormat,
           );
-          // Include enabled RPG attributes alongside persona fields (max values only — current state tracked by agents)
+          // Include enabled RPG attributes alongside persona fields
           if (persona?.personaStats) {
             const pStats = typeof persona.personaStats === "string" ? JSON.parse(persona.personaStats) : persona.personaStats;
             if (pStats?.rpgStats?.enabled) {
-              const rpg = pStats.rpgStats as { attributes: Array<{ name: string; value: number; max: number }>; hp: { value: number; max: number }; mp: { value: number; max: number } };
+              const rpg = pStats.rpgStats as { attributes: Array<{ name: string; value: number }>; hp: { value: number; max: number }; mp: { value: number; max: number } };
               const rpgLines = [`Max HP: ${rpg.hp.max}`, `Max MP: ${rpg.mp.max}`];
               for (const attr of rpg.attributes) {
-                rpgLines.push(`${attr.name}: ${attr.max}`);
+                rpgLines.push(`${attr.name}: ${attr.value}`);
               }
               fieldParts.push(wrapContent(rpgLines.join("\n"), "rpg_attributes", wrapFormat, 2));
             }
@@ -1709,7 +1736,7 @@ export async function generateRoutes(app: FastifyInstance) {
       const gameState = latestGameState ? parseGameStateRow(latestGameState as Record<string, unknown>) : null;
 
       // Build base agent context (without mainResponse — that comes after generation)
-      // Use the maximum contextSize requested by any enabled agent (default 8)
+      // Fetch enough history for the hungriest agent — individual agents trim to their own contextSize.
       const agentContextSize =
         resolvedAgents.length > 0 ? Math.max(...resolvedAgents.map((a) => (a.settings.contextSize as number) || 5)) : 5;
       const agentSlice = chatMessages.slice(-agentContextSize);
@@ -1788,6 +1815,7 @@ export async function generateRoutes(app: FastifyInstance) {
         memory: {},
         activatedLorebookEntries: null,
         writableLorebookIds: null,
+        chatSummary: ((chatMeta.summary as string) ?? "").trim() || null,
         signal: abortController.signal,
       };
 
@@ -1887,6 +1915,22 @@ export async function generateRoutes(app: FastifyInstance) {
               tags: meta[f]?.tags ?? [],
             }));
             agentContext.memory._currentBackground = chatMeta.background ?? null;
+          }
+        } catch {
+          /* non-critical */
+        }
+      }
+
+      // If the haptic agent is enabled, inject connected device info (names + capabilities) into context
+      if (resolvedAgents.some((a) => a.type === "haptic")) {
+        try {
+          const { hapticService } = await import("../services/haptic/buttplug-service.js");
+          if (hapticService.connected && hapticService.devices.length > 0) {
+            agentContext.memory._connectedDevices = hapticService.devices.map((d) => ({
+              name: d.name,
+              index: d.index,
+              capabilities: d.capabilities,
+            }));
           }
         } catch {
           /* non-critical */
@@ -3504,6 +3548,33 @@ export async function generateRoutes(app: FastifyInstance) {
               // Non-critical
             }
           }
+
+          // ── Haptic agent: execute device commands from agent output ──
+          if (result.success && result.type === "haptic_command" && result.data && typeof result.data === "object") {
+            try {
+              const hData = result.data as Record<string, unknown>;
+              const cmds = hData.commands as Array<Record<string, unknown>> | undefined;
+              if (cmds && cmds.length > 0) {
+                const { hapticService } = await import("../services/haptic/buttplug-service.js");
+                if (hapticService.connected) {
+                  for (const cmd of cmds) {
+                    await hapticService.executeCommand({
+                      deviceIndex: (cmd.deviceIndex as number | "all") ?? "all",
+                      action: (cmd.action as string) ?? "vibrate",
+                      intensity: typeof cmd.intensity === "number" ? cmd.intensity : 0.5,
+                      duration: typeof cmd.duration === "number" ? cmd.duration : undefined,
+                    } as any);
+                  }
+                  reply.raw.write(
+                    `data: ${JSON.stringify({ type: "haptic_command", data: { commands: cmds, reasoning: hData.reasoning } })}\n\n`,
+                  );
+                  console.log(`[haptic] Agent executed ${cmds.length} command(s): ${hData.reasoning ?? ""}`);
+                }
+              }
+            } catch (hapErr) {
+              console.error("[haptic] Agent command execution failed:", hapErr);
+            }
+          }
         }
 
         // ── Consistency Editor: runs after ALL other agents ──
@@ -3898,6 +3969,33 @@ export async function generateRoutes(app: FastifyInstance) {
                 );
               } else {
                 console.warn(`[commands] Influence command used but no connected roleplay chat`);
+              }
+            }
+
+            if (command.type === "haptic") {
+              // ── Haptic: send command to connected intimate devices ──
+              const hapCmd = command as HapticCommand;
+              try {
+                const { hapticService } = await import("../services/haptic/buttplug-service.js");
+                if (hapticService.connected && hapticService.devices.length > 0) {
+                  await hapticService.executeCommand({
+                    deviceIndex: "all",
+                    action: hapCmd.action,
+                    intensity: hapCmd.intensity,
+                    duration: hapCmd.duration,
+                  });
+                  reply.raw.write(
+                    `data: ${JSON.stringify({
+                      type: "haptic_command",
+                      data: { action: hapCmd.action, intensity: hapCmd.intensity, duration: hapCmd.duration },
+                    })}\n\n`,
+                  );
+                  console.log(
+                    `[commands] Haptic: ${hapCmd.action} intensity=${hapCmd.intensity ?? "default"} duration=${hapCmd.duration ?? "indefinite"}`,
+                  );
+                }
+              } catch (hapErr) {
+                console.error(`[commands] Haptic command failed:`, hapErr);
               }
             }
 
@@ -4323,6 +4421,7 @@ export async function generateRoutes(app: FastifyInstance) {
         } : null,
         activatedLorebookEntries: null,
         writableLorebookIds: null,
+        chatSummary: ((chatMeta.summary as string) ?? "").trim() || null,
         memory: {},
       };
 

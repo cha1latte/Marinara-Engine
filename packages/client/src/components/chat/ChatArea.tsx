@@ -7,6 +7,7 @@ import {
   useChatMessages,
   useChat,
   useDeleteMessage,
+  useDeleteMessages,
   useUpdateMessage,
   useUpdateMessageExtra,
   usePeekPrompt,
@@ -35,6 +36,7 @@ import { SpriteOverlay } from "./SpriteOverlay";
 import { SpriteSidebar } from "./SpriteSidebar";
 import { AgentThoughtBubbles } from "../agents/AgentThoughtBubbles";
 import { EchoChamberPanel } from "./EchoChamberPanel";
+import { CyoaChoices } from "./CyoaChoices";
 
 import { PinnedImageOverlay } from "./PinnedImageOverlay";
 import {
@@ -54,6 +56,7 @@ import {
   Globe,
   X,
   ArrowRightLeft,
+  Trash2,
 } from "lucide-react";
 import { useUIStore } from "../../stores/ui.store";
 import { useAgentStore } from "../../stores/agent.store";
@@ -181,6 +184,11 @@ export function ChatArea() {
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
 
+  // Delete dialog & multi-select state
+  const [deleteDialogMessageId, setDeleteDialogMessageId] = useState<string | null>(null);
+  const [multiSelectMode, setMultiSelectMode] = useState(false);
+  const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set());
+
   const { data: chat } = useChat(activeChatId);
   const { data: allChats } = useChats();
   const {
@@ -194,6 +202,7 @@ export function ChatArea() {
   const { data: allCharacters } = useCharacters();
   const { data: allPersonas } = usePersonas();
   const deleteMessage = useDeleteMessage(activeChatId);
+  const deleteMessages = useDeleteMessages(activeChatId);
   const updateMessage = useUpdateMessage(activeChatId);
   const updateMessageExtra = useUpdateMessageExtra(activeChatId);
   const peekPrompt = usePeekPrompt();
@@ -453,10 +462,47 @@ export function ChatArea() {
 
   const handleDelete = useCallback(
     (messageId: string) => {
-      deleteMessage.mutate(messageId);
+      setDeleteDialogMessageId(messageId);
     },
-    [deleteMessage],
+    [],
   );
+
+  const handleDeleteConfirm = useCallback(() => {
+    if (deleteDialogMessageId) {
+      deleteMessage.mutate(deleteDialogMessageId);
+    }
+    setDeleteDialogMessageId(null);
+  }, [deleteDialogMessageId, deleteMessage]);
+
+  const handleDeleteMore = useCallback(() => {
+    if (deleteDialogMessageId) {
+      setSelectedMessageIds(new Set([deleteDialogMessageId]));
+    }
+    setDeleteDialogMessageId(null);
+    setMultiSelectMode(true);
+  }, [deleteDialogMessageId]);
+
+  const handleToggleSelectMessage = useCallback((messageId: string) => {
+    setSelectedMessageIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(messageId)) next.delete(messageId);
+      else next.add(messageId);
+      return next;
+    });
+  }, []);
+
+  const handleBulkDelete = useCallback(() => {
+    if (selectedMessageIds.size > 0) {
+      deleteMessages.mutate([...selectedMessageIds]);
+    }
+    setMultiSelectMode(false);
+    setSelectedMessageIds(new Set());
+  }, [selectedMessageIds, deleteMessages]);
+
+  const handleCancelMultiSelect = useCallback(() => {
+    setMultiSelectMode(false);
+    setSelectedMessageIds(new Set());
+  }, []);
 
   const handleRegenerate = useCallback(
     async (messageId: string) => {
@@ -497,9 +543,6 @@ export function ChatArea() {
               api
                 .get<import("@marinara-engine/shared").GameState | null>(`/chats/${activeChatId}/game-state`)
                 .then((gs) => {
-                  console.log(
-                    `[setActiveSwipe] game-state response: chars=${gs?.presentCharacters?.length ?? 0} personaStats=${gs?.personaStats ? "present" : "null"} playerStats=${gs?.playerStats ? "present" : "null"} date=${gs?.date ?? "null"}`,
-                  );
                   useGameStateStore.getState().setGameState(gs ?? null);
                 })
                 .catch(() => {});
@@ -790,7 +833,7 @@ export function ChatArea() {
 
             {/* Special thanks */}
             <p className="mt-1 max-w-xs text-center text-[0.625rem] leading-relaxed text-[var(--muted-foreground)]/40">
-              Special thanks to JorgeLTE, Seele The Seal King, Loungemeister, Kale, Tabris, GREGOR OVECH, Coins, Tacoman, Jorge, Promansis, Kitsumiro, Sheep, Pod042,
+              Special thanks to Coxde, JorgeLTE, Seele The Seal King, Loungemeister, Kale, Tabris, GREGOR OVECH, Coins, Tacoman, Jorge, Promansis, Kitsumiro, Sheep, Pod042,
               Prolix, PlutoMayhem, Mezzeh, Kuc0, Exalted, Yang Best Girl, MidnightSleeper, Geechan, TheLonelyDevil,
               Artus, and you!
             </p>
@@ -852,6 +895,9 @@ export function ChatArea() {
             onOpenSettings={() => setSettingsOpen(true)}
             onOpenFiles={() => setFilesOpen(true)}
             onOpenGallery={() => setGalleryOpen(true)}
+            multiSelectMode={multiSelectMode}
+            selectedMessageIds={selectedMessageIds}
+            onToggleSelectMessage={handleToggleSelectMessage}
             connectedChatName={
               chat?.connectedChatId ? (allChats ?? []).find((c: any) => c.id === chat.connectedChatId)?.name : undefined
             }
@@ -892,6 +938,58 @@ export function ChatArea() {
 
         {/* Peek Prompt Modal */}
         {peekPromptData && <PeekPromptModal data={peekPromptData} onClose={() => setPeekPromptData(null)} />}
+
+        {/* Delete confirmation dialog */}
+        {deleteDialogMessageId && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setDeleteDialogMessageId(null)}>
+            <div className="mx-4 w-full max-w-xs rounded-xl bg-[var(--card)] p-5 shadow-2xl ring-1 ring-[var(--border)]" onClick={(e) => e.stopPropagation()}>
+              <p className="mb-4 text-sm font-semibold text-center">How to proceed?</p>
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={handleDeleteConfirm}
+                  className="rounded-lg bg-[var(--destructive)] px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-[var(--destructive)]/80"
+                >
+                  Delete this message
+                </button>
+                <button
+                  onClick={handleDeleteMore}
+                  className="rounded-lg bg-[var(--secondary)] px-4 py-2 text-xs font-medium transition-colors hover:bg-[var(--accent)]"
+                >
+                  Delete more
+                </button>
+                <button
+                  onClick={() => setDeleteDialogMessageId(null)}
+                  className="rounded-lg px-4 py-2 text-xs font-medium text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)]"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Multi-select floating bar */}
+        {multiSelectMode && (
+          <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-xl bg-[var(--card)] px-5 py-3 shadow-2xl ring-1 ring-[var(--border)]">
+            <span className="text-xs font-medium text-[var(--muted-foreground)]">
+              {selectedMessageIds.size} selected
+            </span>
+            <button
+              onClick={handleBulkDelete}
+              disabled={selectedMessageIds.size === 0}
+              className="flex items-center gap-1.5 rounded-lg bg-[var(--destructive)] px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-[var(--destructive)]/80 disabled:opacity-40"
+            >
+              <Trash2 size="0.75rem" />
+              Delete selected
+            </button>
+            <button
+              onClick={handleCancelMultiSelect}
+              className="rounded-lg px-4 py-2 text-xs font-medium text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)]"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -1155,11 +1253,17 @@ export function ChatArea() {
                           isGrouped={isGrouped(i)}
                           groupChatMode={groupChatMode}
                           chatCharacterIds={chatCharIds}
+                          multiSelectMode={multiSelectMode}
+                          isSelected={selectedMessageIds.has(msg.id)}
+                          onToggleSelect={handleToggleSelectMessage}
                         />
                       </div>
                     );
                   });
                 })()}
+
+                {/* CYOA choice buttons */}
+                {!isStreaming && <CyoaChoices />}
 
                 {/* Streaming indicator */}
                 {isStreaming && !regenerateMessageId && (
@@ -1256,6 +1360,58 @@ export function ChatArea() {
 
       {/* Peek Prompt Modal */}
       {peekPromptData && <PeekPromptModal data={peekPromptData} onClose={() => setPeekPromptData(null)} />}
+
+      {/* Delete confirmation dialog */}
+      {deleteDialogMessageId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setDeleteDialogMessageId(null)}>
+          <div className="mx-4 w-full max-w-xs rounded-xl bg-[var(--card)] p-5 shadow-2xl ring-1 ring-[var(--border)]" onClick={(e) => e.stopPropagation()}>
+            <p className="mb-4 text-sm font-semibold text-center">How to proceed?</p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={handleDeleteConfirm}
+                className="rounded-lg bg-[var(--destructive)] px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-[var(--destructive)]/80"
+              >
+                Delete this message
+              </button>
+              <button
+                onClick={handleDeleteMore}
+                className="rounded-lg bg-[var(--secondary)] px-4 py-2 text-xs font-medium transition-colors hover:bg-[var(--accent)]"
+              >
+                Delete more
+              </button>
+              <button
+                onClick={() => setDeleteDialogMessageId(null)}
+                className="rounded-lg px-4 py-2 text-xs font-medium text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)]"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Multi-select floating bar */}
+      {multiSelectMode && (
+        <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-xl bg-[var(--card)] px-5 py-3 shadow-2xl ring-1 ring-[var(--border)]">
+          <span className="text-xs font-medium text-[var(--muted-foreground)]">
+            {selectedMessageIds.size} selected
+          </span>
+          <button
+            onClick={handleBulkDelete}
+            disabled={selectedMessageIds.size === 0}
+            className="flex items-center gap-1.5 rounded-lg bg-[var(--destructive)] px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-[var(--destructive)]/80 disabled:opacity-40"
+          >
+            <Trash2 size="0.75rem" />
+            Delete selected
+          </button>
+          <button
+            onClick={handleCancelMultiSelect}
+            className="rounded-lg px-4 py-2 text-xs font-medium text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)]"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
     </div>
   );
 }

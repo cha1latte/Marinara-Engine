@@ -223,6 +223,7 @@ export function createLorebooksStorage(db: DB) {
         sticky: input.sticky ?? null,
         cooldown: input.cooldown ?? null,
         delay: input.delay ?? null,
+        ephemeral: input.ephemeral ?? null,
         group: input.group ?? "",
         groupWeight: input.groupWeight ?? null,
         tag: input.tag ?? "",
@@ -260,6 +261,7 @@ export function createLorebooksStorage(db: DB) {
       if (input.sticky !== undefined) updates.sticky = input.sticky;
       if (input.cooldown !== undefined) updates.cooldown = input.cooldown;
       if (input.delay !== undefined) updates.delay = input.delay;
+      if (input.ephemeral !== undefined) updates.ephemeral = input.ephemeral;
       if (input.group !== undefined) updates.group = input.group;
       if (input.groupWeight !== undefined) updates.groupWeight = input.groupWeight;
       if (input.tag !== undefined) updates.tag = input.tag;

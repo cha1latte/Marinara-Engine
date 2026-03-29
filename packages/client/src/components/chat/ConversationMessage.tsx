@@ -233,6 +233,9 @@ interface ConversationMessageProps {
   personaInfo?: PersonaInfo;
   /** Override the edit button click (used by SplitMessageGroup) */
   onEditClick?: () => void;
+  multiSelectMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (messageId: string) => void;
 }
 
 export const ConversationMessage = memo(function ConversationMessage({
@@ -250,6 +253,9 @@ export const ConversationMessage = memo(function ConversationMessage({
   characterMap,
   personaInfo,
   onEditClick,
+  multiSelectMode,
+  isSelected,
+  onToggleSelect,
 }: ConversationMessageProps) {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(message.content);
@@ -272,15 +278,24 @@ export const ConversationMessage = memo(function ConversationMessage({
   const displayName = isUser ? (personaInfo?.name ?? "You") : (charInfo?.name ?? "Assistant");
   const nameColor = !isUser ? charInfo?.nameColor : undefined;
 
-  // Build name→character lookup for speaker tag resolution
+  // Build name→character lookup for speaker tag resolution.
+  // When multiple characters share the same name, prefer the one assigned to this message.
   const charByName = useMemo(() => {
     if (!characterMap) return null;
     const map = new Map<string, NonNullable<ReturnType<CharacterMap["get"]>>>();
-    for (const [, v] of characterMap) {
-      if (v) map.set(v.name.toLowerCase(), v);
+    for (const [id, v] of characterMap) {
+      if (v) {
+        const key = v.name.toLowerCase();
+        // If the message's own characterId matches this entry, always prefer it
+        if (id === message.characterId) {
+          map.set(key, v);
+        } else if (!map.has(key)) {
+          map.set(key, v);
+        }
+      }
     }
     return map;
-  }, [characterMap]);
+  }, [characterMap, message.characterId]);
 
   // Parse speaker tags or Name: text format for group merged-mode messages
   const groupedSegments = useMemo(() => {
@@ -352,9 +367,33 @@ export const ConversationMessage = memo(function ConversationMessage({
           !noHoverGroup && "group",
           isGrouped ? "mt-0" : "mt-3",
           isStreaming && "bg-[var(--secondary)]/20",
+          multiSelectMode && isSelected && "bg-[var(--destructive)]/10",
         )}
-        onClick={() => setShowActions((v) => !v)}
+        onClick={() => {
+          if (multiSelectMode) {
+            onToggleSelect?.(message.id);
+          } else {
+            setShowActions((v) => !v);
+          }
+        }}
       >
+        {/* Multi-select checkbox */}
+        {multiSelectMode && (
+          <div className="absolute left-1 top-1/2 -translate-y-1/2 z-10">
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={isSelected}
+              aria-label={isSelected ? "Deselect message" : "Select message"}
+              className={cn(
+                "h-5 w-5 rounded border-2 flex items-center justify-center transition-colors cursor-pointer",
+                isSelected ? "border-[var(--destructive)] bg-[var(--destructive)]" : "border-[var(--muted-foreground)]/40 bg-[var(--secondary)]",
+              )}
+            >
+              {isSelected && <span className="text-white text-xs font-bold">✓</span>}
+            </button>
+          </div>
+        )}
         {/* Render each grouped speaker as a mini-message row */}
         {groupedSegments.map((grp, i) => {
           const segChar = grp.speaker && charByName ? charByName.get(grp.speaker.toLowerCase()) : null;
@@ -495,11 +534,30 @@ export const ConversationMessage = memo(function ConversationMessage({
         !noHoverGroup && "group",
         isGrouped ? "mt-0" : "mt-4",
         isStreaming && "bg-[var(--secondary)]/20",
+        multiSelectMode && isSelected && "bg-[var(--destructive)]/10",
       )}
       data-message-id={message.id}
       data-message-role={message.role}
-      onClick={() => setShowActions((v) => !v)}
+      onClick={() => {
+        if (multiSelectMode) {
+          onToggleSelect?.(message.id);
+        } else {
+          setShowActions((v) => !v);
+        }
+      }}
     >
+      {/* Multi-select checkbox */}
+      {multiSelectMode && (
+        <div className="flex items-center flex-shrink-0">
+          <div className={cn(
+            "h-5 w-5 rounded border-2 flex items-center justify-center transition-colors cursor-pointer",
+            isSelected ? "border-[var(--destructive)] bg-[var(--destructive)]" : "border-[var(--muted-foreground)]/40 bg-[var(--secondary)]",
+          )}>
+            {isSelected && <span className="text-white text-xs font-bold">✓</span>}
+          </div>
+        </div>
+      )}
+
       {/* Avatar column — fixed 40px width */}
       <div className="mari-message-avatar w-10 flex-shrink-0">
         {!isGrouped && (

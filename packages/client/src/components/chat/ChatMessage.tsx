@@ -111,6 +111,9 @@ interface ChatMessageProps {
   chatCharacterIds?: string[];
   /** Distance from the latest message (0 = newest). Used for depth-range regex filtering. */
   messageDepth?: number;
+  multiSelectMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (messageId: string) => void;
 }
 
 /** Regex to match markdown headings at the start of a line. */
@@ -451,6 +454,9 @@ export const ChatMessage = memo(function ChatMessage({
   groupChatMode,
   chatCharacterIds,
   messageDepth,
+  multiSelectMode,
+  isSelected,
+  onToggleSelect,
 }: ChatMessageProps) {
   const isUser = message.role === "user";
   const isSystem = message.role === "system";
@@ -482,13 +488,18 @@ export const ChatMessage = memo(function ChatMessage({
   }, [showActions]);
 
   const handleMobileTap = useCallback((e: React.MouseEvent) => {
+    // In multi-select mode, clicking toggles selection on any device
+    if (multiSelectMode) {
+      onToggleSelect?.(message.id);
+      return;
+    }
     // Only toggle on touch devices
     if (!matchMedia("(pointer: coarse)").matches) return;
     // Don't toggle when tapping buttons, links, or the edit textarea
     const target = e.target as HTMLElement;
     if (target.closest("button, a, textarea")) return;
     setShowActions((v) => !v);
-  }, []);
+  }, [multiSelectMode, onToggleSelect, message.id]);
 
   // Parse message extra for conversation start flag
   const extra = useMemo(() => {
@@ -758,11 +769,29 @@ export const ChatMessage = memo(function ChatMessage({
           className={cn(
             "mari-message group mb-4 flex gap-3 px-2",
             isUser ? "mari-message-user flex-row-reverse" : "mari-message-assistant",
+            multiSelectMode && isSelected && "ring-2 ring-[var(--destructive)]/50 rounded-lg bg-[var(--destructive)]/5",
           )}
           data-message-id={message.id}
           data-message-role={message.role}
           onClick={handleMobileTap}
         >
+          {/* Multi-select checkbox */}
+          {multiSelectMode && (
+            <div className="flex items-start pt-2 flex-shrink-0">
+              <button
+                type="button"
+                role="checkbox"
+                aria-checked={isSelected}
+                aria-label={isSelected ? "Deselect message" : "Select message"}
+                className={cn(
+                  "h-5 w-5 rounded border-2 flex items-center justify-center transition-colors cursor-pointer",
+                  isSelected ? "border-[var(--destructive)] bg-[var(--destructive)]" : "border-[var(--muted-foreground)]/40 bg-[var(--secondary)]",
+                )}
+              >
+                {isSelected && <span className="text-white text-xs font-bold">✓</span>}
+              </button>
+            </div>
+          )}
           {/* Avatar Column */}
           {!isGrouped && (
             <div className="mari-message-avatar flex-shrink-0 pt-1">
@@ -1007,6 +1036,7 @@ export const ChatMessage = memo(function ChatMessage({
         "mari-message group flex",
         isUser ? "mari-message-user justify-end" : "mari-message-assistant justify-start",
         isGrouped ? "mb-0.5" : "mb-3",
+        multiSelectMode && isSelected && "bg-[var(--destructive)]/5",
       )}
       data-message-id={message.id}
       data-message-role={message.role}

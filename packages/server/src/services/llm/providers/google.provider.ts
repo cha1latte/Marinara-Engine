@@ -116,7 +116,6 @@ export class GoogleProvider extends BaseLLMProvider {
       headers: {
         "Content-Type": "application/json",
         "x-goog-api-key": this.apiKey,
-        Authorization: `Bearer ${this.apiKey}`,
       },
       body: JSON.stringify(body),
       ...(options.signal ? { signal: options.signal } : {}),

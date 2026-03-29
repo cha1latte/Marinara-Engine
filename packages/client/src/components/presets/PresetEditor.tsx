@@ -341,9 +341,9 @@ export function PresetEditor() {
       )}
 
       {/* ── Body: Tab rail + Content ── */}
-      <div className="flex flex-1 overflow-hidden max-md:flex-col">
+      <div className="flex flex-1 overflow-hidden max-lg:flex-col">
         {/* Tab rail */}
-        <nav className="flex w-44 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-[var(--border)] bg-[var(--card)] p-2 max-md:w-full max-md:flex-row max-md:overflow-x-auto max-md:border-r-0 max-md:border-b max-md:p-1.5">
+        <nav className="flex w-44 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-[var(--border)] bg-[var(--card)] p-2 max-lg:w-full max-lg:flex-row max-lg:overflow-x-auto max-lg:border-r-0 max-lg:border-b max-lg:p-1.5">
           {TABS.map((tab) => {
             const Icon = tab.icon;
             return (
@@ -351,7 +351,7 @@ export function PresetEditor() {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  "flex items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium transition-all max-md:whitespace-nowrap max-md:px-2.5 max-md:py-1.5",
+                  "flex items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium transition-all max-lg:whitespace-nowrap max-lg:px-2.5 max-lg:py-1.5",
                   activeTab === tab.id
                     ? "bg-gradient-to-r from-purple-400/15 to-violet-500/15 text-[var(--primary)] ring-1 ring-[var(--primary)]/20"
                     : "text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]",
@@ -365,7 +365,7 @@ export function PresetEditor() {
         </nav>
 
         {/* Content area */}
-        <div className="flex-1 overflow-y-auto p-6 max-md:p-4">
+        <div className="flex-1 overflow-y-auto p-6 max-lg:p-4">
           <div className="mx-auto max-w-2xl space-y-6">
             {/* ── Overview Tab ── */}
             {activeTab === "overview" && (

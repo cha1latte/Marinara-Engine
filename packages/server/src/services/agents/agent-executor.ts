@@ -5,6 +5,8 @@ import type { BaseLLMProvider, ChatMessage, LLMToolDefinition, LLMToolCall } fro
 import type { AgentResult, AgentContext, AgentResultType } from "@marinara-engine/shared";
 import { getDefaultAgentPrompt } from "@marinara-engine/shared";
 
+const VERBOSE = process.env.DEBUG_AGENTS === "1" || process.env.DEBUG_AGENTS === "true";
+
 /** Strip HTML/XML-style tags (e.g. <div style="..."> <br> <speaker>) from text to save tokens. */
 function stripHtmlTags(text: string): string {
   return text.replace(/<\/?[a-zA-Z][^>]*>/g, "").replace(/\n{3,}/g, "\n\n").trim();
@@ -64,8 +66,9 @@ export async function executeAgent(
       systemParts.push(extras);
     }
 
-    // Build multi-turn message array for this agent
-    const messages = buildAgentMessages(systemParts.join("\n"), context, config.type);
+    // Build multi-turn message array for this agent (sliced to its own contextSize)
+    const agentContextSize = (config.settings.contextSize as number) || 5;
+    const messages = buildAgentMessages(systemParts.join("\n"), context, config.type, agentContextSize);
 
     // Agents use lower temperature for reliability
     const temperature = (config.settings.temperature as number) ?? 0.3;
@@ -87,11 +90,13 @@ export async function executeAgent(
     }
 
     // Call LLM (streaming to avoid proxy timeouts, no tools)
-    console.log(`\n[agent] ═══ ${config.type} (${config.name}) — ${model} ═══`);
-    for (const msg of messages) {
-      console.log(`[agent] [${msg.role}] ${msg.content}`);
+    console.log(`[agent] ${config.type} (${config.name}) — ${model}`);
+    if (VERBOSE) {
+      for (const msg of messages) {
+        console.log(`[agent] [${msg.role}] ${msg.content}`);
+      }
+      console.log(`[agent] ═══ END PROMPT — temperature=${temperature} maxTokens=${maxTokens} ═══\n`);
     }
-    console.log(`[agent] ═══ END PROMPT — temperature=${temperature} maxTokens=${maxTokens} ═══\n`);
 
     let responseText = "";
     const result = await provider.chatComplete(messages, {
@@ -108,9 +113,10 @@ export async function executeAgent(
     responseText = responseText.trim();
     const durationMs = Date.now() - startTime;
 
-    console.log(`[agent] ═══ ${config.type} RESPONSE (${responseText.length} chars, ${durationMs}ms) ═══`);
-    console.log(`[agent] ${responseText}`);
-    console.log(`[agent] ═══ END RESPONSE ═══\n`);
+    console.log(`[agent] ${config.type} done (${responseText.length} chars, ${durationMs}ms)`);
+    if (VERBOSE) {
+      console.log(`[agent] ${responseText}`);
+    }
 
     // Parse the result based on agent type
     const parsed = parseAgentResponse(config.type, responseText);
@@ -242,7 +248,9 @@ export async function executeAgentBatch(
   try {
     // Build merged system prompt (includes lore + agent extras)
     const systemPrompt = buildBatchSystemPrompt(configs, context);
-    const messages = buildAgentMessages(systemPrompt, context, "__batch__");
+    // Batch uses the max contextSize among its members
+    const batchContextSize = Math.max(...configs.map((c) => (c.settings.contextSize as number) || 5));
+    const messages = buildAgentMessages(systemPrompt, context, "__batch__", batchContextSize);
 
     // Each agent needs enough room for its full JSON output.
     // Use a generous floor (16384) so the model never runs out mid-response.
@@ -253,11 +261,13 @@ export async function executeAgentBatch(
       `[agent-batch] maxTokens: ${batchMaxTokens} (${maxTokensPerAgent} × ${configs.length} agents, floor 16384)`,
     );
 
-    console.log(`\n[agent-batch] ═══ BATCH PROMPT — [${configs.map((c) => c.type).join(", ")}] — ${model} ═══`);
-    for (const msg of messages) {
-      console.log(`[agent-batch] [${msg.role}] ${msg.content}`);
+    if (VERBOSE) {
+      console.log(`\n[agent-batch] ═══ BATCH PROMPT — [${configs.map((c) => c.type).join(", ")}] — ${model} ═══`);
+      for (const msg of messages) {
+        console.log(`[agent-batch] [${msg.role}] ${msg.content}`);
+      }
+      console.log(`[agent-batch] ═══ END BATCH PROMPT — temperature=${temperature} maxTokens=${batchMaxTokens} ═══\n`);
     }
-    console.log(`[agent-batch] ═══ END BATCH PROMPT — temperature=${temperature} maxTokens=${batchMaxTokens} ═══\n`);
 
     // Use streaming (onToken) to keep the connection alive — avoids proxy
     // timeouts (e.g. Cloudflare 524) on large batch responses.
@@ -280,9 +290,9 @@ export async function executeAgentBatch(
     const totalTokens = result.usage?.totalTokens ?? 0;
 
     console.log(`[agent-batch] Got response (${responseText.length} chars, ${durationMs}ms, ${totalTokens} tokens)`);
-    console.log(`[agent-batch] ═══ BATCH RESPONSE ═══`);
-    console.log(`[agent-batch] ${responseText}`);
-    console.log(`[agent-batch] ═══ END BATCH RESPONSE ═══\n`);
+    if (VERBOSE) {
+      console.log(`[agent-batch] ${responseText}`);
+    }
 
     // Parse the batched response into individual results
     const { parsed, failed } = parseBatchResponse(configs, responseText, durationMs, totalTokens);
@@ -491,23 +501,30 @@ export function extractErrorMessage(err: unknown, fallback = "Agent execution fa
  *   FINAL USER MESSAGE:
  *     assistant_response (if post-processing) + "Now return the requested format(s)."
  */
-function buildAgentMessages(systemPrompt: string, context: AgentContext, agentType: string): ChatMessage[] {
+function buildAgentMessages(
+  systemPrompt: string,
+  context: AgentContext,
+  agentType: string,
+  contextSize = 5,
+): ChatMessage[] {
   // ── 1. System message — already contains <role>, <lore>, <agents>, and extras ──
   const messages: ChatMessage[] = [{ role: "system", content: systemPrompt }];
 
   // ── 2. Chat history as proper multi-turn messages ──
-  if (context.recentMessages.length > 0) {
+  // Slice to this agent's own contextSize (the shared pool may be larger)
+  const recent = context.recentMessages.slice(-contextSize);
+  if (recent.length > 0) {
     // Only attach committed tracker state to the last 3 assistant messages to save tokens
     const assistantIndices: number[] = [];
-    for (let i = 0; i < context.recentMessages.length; i++) {
-      if (context.recentMessages[i]!.role === "assistant" && context.recentMessages[i]!.gameState) {
+    for (let i = 0; i < recent.length; i++) {
+      if (recent[i]!.role === "assistant" && recent[i]!.gameState) {
         assistantIndices.push(i);
       }
     }
     const trackerEligible = new Set(assistantIndices.slice(-3));
 
-    for (let msgIdx = 0; msgIdx < context.recentMessages.length; msgIdx++) {
-      const msg = context.recentMessages[msgIdx]!;
+    for (let msgIdx = 0; msgIdx < recent.length; msgIdx++) {
+      const msg = recent[msgIdx]!;
       const role: "user" | "assistant" = msg.role === "assistant" ? "assistant" : "user";
       let content = stripHtmlTags(msg.content).slice(0, 2000);
 
@@ -618,7 +635,7 @@ function buildLoreBlock(context: AgentContext): string {
       if (rpg.attributes.length > 0) {
         parts.push(`Attributes:`);
         for (const attr of rpg.attributes) {
-          parts.push(`- ${attr.name}: ${attr.max}`);
+          parts.push(`- ${attr.name}: ${attr.value}`);
         }
       }
     }
@@ -682,6 +699,12 @@ function buildAgentExtras(context: AgentContext): string {
     }
   }
 
+  if (context.chatSummary) {
+    parts.push(`<chat_summary>`);
+    parts.push(context.chatSummary);
+    parts.push(`</chat_summary>`);
+  }
+
   if (context.memory._sourceMaterial) {
     parts.push(`<source_material>`);
     parts.push(context.memory._sourceMaterial as string);
@@ -714,6 +737,15 @@ function buildAgentExtras(context: AgentContext): string {
     parts.push(`</knowledge_material>`);
   }
 
+  if (context.memory._connectedDevices) {
+    const devices = context.memory._connectedDevices as Array<{ name: string; index: number; capabilities: string[] }>;
+    parts.push(`<connected_devices>`);
+    for (const d of devices) {
+      parts.push(`- ${d.name} (index ${d.index}): ${d.capabilities.join(", ")}`);
+    }
+    parts.push(`</connected_devices>`);
+  }
+
   return parts.join("\n");
 }
 
@@ -738,6 +770,8 @@ const AGENT_RESULT_TYPE_MAP: Record<string, AgentResultType> = {
   spotify: "spotify_control",
   editor: "text_rewrite",
   "knowledge-retrieval": "context_injection",
+  haptic: "haptic_command",
+  cyoa: "cyoa_choices",
 };
 
 /** Agents that return structured JSON. */
@@ -758,6 +792,8 @@ const JSON_AGENTS = new Set([
   "chat-summary",
   "spotify",
   "editor",
+  "haptic",
+  "cyoa",
 ]);
 
 /**

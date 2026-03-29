@@ -59,4 +59,16 @@ export async function agentsRoutes(app: FastifyInstance) {
       settings: builtIn.defaultInjectAsSection ? { injectAsSection: true } : {},
     });
   });
+
+  /** Get echo chamber messages for a chat (for persistence across refreshes). */
+  app.get<{ Params: { chatId: string } }>("/echo-messages/:chatId", async (req) => {
+    return storage.getEchoMessages(req.params.chatId);
+  });
+
+  /** Clear all agent runs and memory for a specific chat. */
+  app.delete<{ Params: { chatId: string } }>("/runs/:chatId", async (req, reply) => {
+    await storage.clearRunsForChat(req.params.chatId);
+    await storage.clearMemoryForChat(req.params.chatId);
+    return reply.status(204).send();
+  });
 }

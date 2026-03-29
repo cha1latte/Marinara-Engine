@@ -102,6 +102,30 @@ export function createAgentsStorage(db: DB) {
       return rows[0]?.agent_runs ?? null;
     },
 
+    /** Get all echo chamber messages for a chat, ordered by creation time. */
+    async getEchoMessages(chatId: string) {
+      const rows = await db
+        .select({ resultData: agentRuns.resultData, createdAt: agentRuns.createdAt })
+        .from(agentRuns)
+        .where(and(eq(agentRuns.chatId, chatId), eq(agentRuns.resultType, "echo_message"), eq(agentRuns.success, "true")))
+        .orderBy(agentRuns.createdAt);
+
+      const messages: Array<{ characterName: string; reaction: string; timestamp: number }> = [];
+      for (const row of rows) {
+        try {
+          const data = JSON.parse(row.resultData);
+          const reactions = data?.reactions ?? [];
+          const ts = new Date(row.createdAt).getTime();
+          for (const r of reactions) {
+            if (r.characterName && r.reaction) {
+              messages.push({ characterName: r.characterName, reaction: r.reaction, timestamp: ts });
+            }
+          }
+        } catch { /* skip malformed entries */ }
+      }
+      return messages.slice(-100);
+    },
+
     // ── Agent Memory (persistent KV per agent per chat) ──
 
     async getMemory(agentConfigId: string, chatId: string): Promise<Record<string, unknown>> {
@@ -144,6 +168,16 @@ export function createAgentsStorage(db: DB) {
           updatedAt: now(),
         });
       }
+    },
+
+    /** Delete all agent runs for a specific chat. */
+    async clearRunsForChat(chatId: string) {
+      await db.delete(agentRuns).where(eq(agentRuns.chatId, chatId));
+    },
+
+    /** Delete all agent memory entries for a specific chat. */
+    async clearMemoryForChat(chatId: string) {
+      await db.delete(agentMemory).where(eq(agentMemory.chatId, chatId));
     },
   };
 }

@@ -41,6 +41,28 @@ export function AppShell() {
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
   }, []);
+
+  // Auto-close right panel when viewport is too narrow for comfort
+  useEffect(() => {
+    if (isMobile) return; // Mobile uses overlays, no squishing concern
+    let rafId = 0;
+    const handleResize = () => {
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        const { rightPanelOpen: rp, sidebarOpen: sb, sidebarWidth: sw, closeRightPanel: close } =
+          useUIStore.getState();
+        if (!rp) return;
+        const panelWidth = 320; // 20rem
+        const reserved = (sb ? sw : 0) + panelWidth;
+        if (window.innerWidth - reserved < 400) close();
+      });
+    };
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      cancelAnimationFrame(rafId);
+    };
+  }, [isMobile]);
   const sidebarWidth = useUIStore((s) => s.sidebarWidth);
   const characterDetailId = useUIStore((s) => s.characterDetailId);
   const lorebookDetailId = useUIStore((s) => s.lorebookDetailId);
@@ -95,7 +117,7 @@ export function AppShell() {
         data-tour="chat-area"
         data-component="CenterContent"
         aria-label="Main content"
-        className="mari-main flex flex-1 flex-col overflow-hidden"
+        className="mari-main flex min-w-0 flex-1 flex-col overflow-hidden"
       >
         <TopBar />
         {regexDetailId ? (

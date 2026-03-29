@@ -105,6 +105,26 @@ export async function processLorebooks(
     activated = scanForActivatedEntries(messages, allEntries, scanOpts);
   }
 
+  // Decrement ephemeral counters for activated entries and auto-disable when exhausted
+  const ephemeralUpdates: Array<{ id: string; ephemeral: number | null; disable: boolean }> = [];
+  for (const a of activated) {
+    if (a.entry.ephemeral !== null && a.entry.ephemeral > 0) {
+      const remaining = a.entry.ephemeral - 1;
+      ephemeralUpdates.push({ id: a.entry.id, ephemeral: remaining, disable: remaining <= 0 });
+    }
+  }
+  if (ephemeralUpdates.length > 0) {
+    for (const u of ephemeralUpdates) {
+      try {
+        const patch: Record<string, unknown> = { ephemeral: u.ephemeral };
+        if (u.disable) patch.enabled = false;
+        await storage.updateEntry(u.id, patch as any);
+      } catch {
+        // Non-fatal — don't crash generation if the DB write fails (e.g. SQLITE_READONLY)
+      }
+    }
+  }
+
   // Process into injectable content
   const result = processActivatedEntries(activated, tokenBudget);
 

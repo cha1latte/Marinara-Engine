@@ -52,7 +52,7 @@
 
 ## Changelog
 
-### v1.4.4
+### v1.4.5
 
 **Added:**
 
@@ -84,7 +84,7 @@
 
 ## Windows EASIEST METHOD
 
-Download **[Marinara-Engine-Installer-1.4.4.exe](https://github.com/SpicyMarinara/Marinara-Engine/releases/download/v1.4.4/Marinara-Engine-Installer-1.4.4.exe)** from the [Releases](https://github.com/SpicyMarinara/Marinara-Engine/releases) page and run it. The installer checks for Node.js and Git, clones the repo, installs dependencies, builds the app, and creates a desktop shortcut.
+Download **[Marinara-Engine-Installer-1.4.5.exe](https://github.com/SpicyMarinara/Marinara-Engine/releases/download/v1.4.5/Marinara-Engine-Installer-1.4.5.exe)** from the [Releases](https://github.com/SpicyMarinara/Marinara-Engine/releases) page and run it. The installer checks for Node.js and Git, clones the repo, installs dependencies, builds the app, and creates a desktop shortcut.
 
 ---
 
@@ -397,6 +397,15 @@ If you see an error like `EPERM: operation not permitted, open 'C:\Program Files
 
 - [**Join our Discord**](https://discord.com/invite/KdAkTg94ME) — Chat, get help, share characters, and give feedback
 - [**Support on Ko-fi**](https://ko-fi.com/marinara_spaghetti) — Help keep the project alive
+
+---
+
+## Contributors
+
+- [Spicy Marinara](https://github.com/SpicyMarinara)
+- [Jorge Becerra](https://github.com/JorgeLTE)
+- [Coda](https://github.com/coxde)
+- [Andy Mauragis](https://github.com/amauragis)
 
 ---
 

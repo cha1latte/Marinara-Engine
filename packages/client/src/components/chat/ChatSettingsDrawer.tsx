@@ -34,6 +34,7 @@ import {
   Globe,
   Maximize2,
   Languages,
+  Vibrate,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { HelpTooltip } from "../ui/HelpTooltip";
@@ -1660,6 +1661,69 @@ export function ChatSettingsDrawer({ chat, open, onClose }: ChatSettingsDrawerPr
                 </button>
               );
             })()}
+          </Section>
+
+          {/* Love Toys Control — both modes, requires Intiface Central */}
+          <Section
+            label="Love Toys Control"
+            icon={<Vibrate size="0.875rem" />}
+            help="Control connected intimate toys based on narrative content. In Conversation mode, the character can send device commands directly. In Roleplay mode, add the Love Toys Control agent."
+          >
+            <button
+              onClick={() => {
+                updateMeta.mutate({ id: chat.id, enableHapticFeedback: !metadata.enableHapticFeedback });
+              }}
+              className={cn(
+                "flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left transition-all",
+                metadata.enableHapticFeedback
+                  ? "bg-[var(--primary)]/10 ring-1 ring-[var(--primary)]/30"
+                  : "bg-[var(--secondary)] hover:bg-[var(--accent)]",
+              )}
+            >
+              <div className="flex-1 min-w-0">
+                <span className="text-[0.6875rem] font-medium">Enable Love Toys Control</span>
+                <p className="text-[0.625rem] text-[var(--muted-foreground)]">
+                  {isConversation
+                    ? "Lets the character control your connected toys during the conversation"
+                    : "Enable the Love Toys Control agent to control devices based on the narrative"}
+                </p>
+              </div>
+              <div
+                className={cn(
+                  "h-5 w-9 shrink-0 rounded-full p-0.5 transition-colors",
+                  metadata.enableHapticFeedback ? "bg-[var(--primary)]" : "bg-[var(--muted-foreground)]/50",
+                )}
+              >
+                <div
+                  className={cn(
+                    "h-4 w-4 rounded-full bg-white shadow-sm transition-transform",
+                    metadata.enableHapticFeedback && "translate-x-3.5",
+                  )}
+                />
+              </div>
+            </button>
+            <p className="text-[0.625rem] text-[var(--muted-foreground)] px-1 mt-1">
+              <strong>How to connect:</strong> Install and open{" "}
+              <a
+                href="https://intiface.com/central/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline text-[var(--primary)]"
+              >
+                Intiface Central
+              </a>
+              , scan for your toy under "Devices", then start the server. Marinara will detect it automatically.
+              See the{" "}
+              <a
+                href="https://docs.intiface.com/docs/intiface-central/quickstart"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline text-[var(--primary)]"
+              >
+                quickstart guide
+              </a>{" "}
+              for detailed setup.
+            </p>
           </Section>
 
           {/* Discord Webhook — conversation mode only */}

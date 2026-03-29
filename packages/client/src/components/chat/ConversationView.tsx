@@ -43,6 +43,9 @@ interface ConversationViewProps {
   onOpenSettings: () => void;
   onOpenFiles: () => void;
   onOpenGallery: () => void;
+  multiSelectMode?: boolean;
+  selectedMessageIds?: Set<string>;
+  onToggleSelectMessage?: (messageId: string) => void;
   connectedChatName?: string;
   onSwitchChat?: () => void;
   sceneInfo?: {
@@ -116,6 +119,9 @@ export function ConversationView({
   onOpenSettings,
   onOpenFiles,
   onOpenGallery,
+  multiSelectMode,
+  selectedMessageIds,
+  onToggleSelectMessage,
   connectedChatName,
   onSwitchChat,
   sceneInfo,
@@ -193,6 +199,8 @@ export function ConversationView({
   useEffect(() => {
     if (!chatId) return;
     const refreshStatus = async () => {
+      // Skip while tab is hidden to avoid a burst of requests on return
+      if (document.hidden) return;
       try {
         await api.get(`/conversation/status/${chatId}`);
         qc.invalidateQueries({ queryKey: characterKeys.list() });
@@ -750,6 +758,9 @@ export function ConversationView({
                 isLastAssistantMessage={msg.id === lastAssistantMessageId}
                 characterMap={characterMap}
                 personaInfo={personaInfo as any}
+                multiSelectMode={multiSelectMode}
+                isSelected={selectedMessageIds?.has(msg.id)}
+                onToggleSelect={onToggleSelectMessage}
               />,
             );
             i++;

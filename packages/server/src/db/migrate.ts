@@ -393,6 +393,11 @@ const COLUMN_MIGRATIONS: ColumnMigration[] = [
     column: "locked",
     definition: "TEXT NOT NULL DEFAULT 'false'",
   },
+  {
+    table: "lorebook_entries",
+    column: "ephemeral",
+    definition: "INTEGER",
+  },
 ];
 
 export async function runMigrations(db: DB) {

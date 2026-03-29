@@ -1,7 +1,7 @@
 // ──────────────────────────────────────────────
 // Storage: Chats
 // ──────────────────────────────────────────────
-import { eq, desc, and, lt, sql, count } from "drizzle-orm";
+import { eq, desc, and, lt, sql, count, inArray } from "drizzle-orm";
 import type { DB } from "../../db/connection.js";
 import { chats, messages, messageSwipes, chatImages, oocInfluences } from "../../db/schema/index.js";
 import { newId, now } from "../../utils/id-generator.js";
@@ -261,6 +261,18 @@ export function createChatsStorage(db: DB) {
 
     async removeMessage(id: string) {
       await db.delete(messages).where(eq(messages.id, id));
+    },
+
+    async removeMessages(ids: string[], chatId?: string) {
+      if (ids.length === 0) return;
+      const CHUNK = 500;
+      for (let i = 0; i < ids.length; i += CHUNK) {
+        const chunk = ids.slice(i, i + CHUNK);
+        const condition = chatId
+          ? and(inArray(messages.id, chunk), eq(messages.chatId, chatId))
+          : inArray(messages.id, chunk);
+        await db.delete(messages).where(condition);
+      }
     },
 
     async getSwipes(messageId: string) {

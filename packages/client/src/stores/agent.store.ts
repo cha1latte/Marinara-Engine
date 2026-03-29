@@ -36,6 +36,10 @@ interface AgentState {
     reaction: string;
     timestamp: number;
   }>;
+  cyoaChoices: Array<{
+    label: string;
+    text: string;
+  }>;
   debugLog: AgentDebugEntry[];
 
   // Actions
@@ -48,7 +52,10 @@ interface AgentState {
   dismissThoughtBubble: (index: number) => void;
   clearThoughtBubbles: () => void;
   addEchoMessage: (characterName: string, reaction: string) => void;
+  setEchoMessages: (messages: Array<{ characterName: string; reaction: string; timestamp: number }>) => void;
   clearEchoMessages: () => void;
+  setCyoaChoices: (choices: Array<{ label: string; text: string }>) => void;
+  clearCyoaChoices: () => void;
   addDebugEntry: (entry: AgentDebugEntry) => void;
   clearDebugLog: () => void;
   reset: () => void;
@@ -61,6 +68,7 @@ export const useAgentStore = create<AgentState>((set) => ({
   failedAgentTypes: [],
   thoughtBubbles: [],
   echoMessages: [],
+  cyoaChoices: [],
   debugLog: [],
 
   setActiveAgents: (agents) => set({ activeAgents: agents }),
@@ -98,7 +106,12 @@ export const useAgentStore = create<AgentState>((set) => ({
       echoMessages: [...s.echoMessages, { characterName, reaction, timestamp: Date.now() }].slice(-100),
     })),
 
+  setEchoMessages: (messages) => set({ echoMessages: messages.slice(-100) }),
+
   clearEchoMessages: () => set({ echoMessages: [] }),
+
+  setCyoaChoices: (choices) => set({ cyoaChoices: choices }),
+  clearCyoaChoices: () => set({ cyoaChoices: [] }),
 
   addDebugEntry: (entry) => set((s) => ({ debugLog: [...s.debugLog, entry].slice(-100) })),
   clearDebugLog: () => set({ debugLog: [] }),
@@ -111,6 +124,7 @@ export const useAgentStore = create<AgentState>((set) => ({
       failedAgentTypes: [],
       thoughtBubbles: [],
       echoMessages: [],
+      cyoaChoices: [],
       debugLog: [],
     }),
 }));
