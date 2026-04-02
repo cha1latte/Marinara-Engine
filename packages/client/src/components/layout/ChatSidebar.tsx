@@ -485,7 +485,7 @@ export function ChatSidebar() {
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={cn(
-                "flex min-h-[2.125rem] flex-1 items-center justify-center gap-1.5 overflow-visible rounded-lg px-2 py-2 text-xs leading-normal font-medium transition-all",
+                "relative flex min-h-[2.125rem] flex-1 items-center justify-center gap-1.5 overflow-visible rounded-lg px-2 py-2 text-xs leading-normal font-medium transition-all",
                 isActive
                   ? "bg-[var(--sidebar-accent)] text-[var(--sidebar-accent-foreground)] shadow-sm"
                   : "text-[var(--muted-foreground)] hover:bg-[var(--sidebar-accent)]/50 hover:text-[var(--sidebar-foreground)]",
@@ -494,7 +494,7 @@ export function ChatSidebar() {
               <span className="shrink-0 leading-none">{cfg.icon}</span>
               <span className="inline-flex min-h-[1rem] items-center whitespace-nowrap pb-px leading-normal">{cfg.label}s</span>
               {tabUnread > 0 && !isActive && (
-                <span className="ml-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[0.5625rem] font-bold leading-none text-white">
+                <span className="absolute -top-1 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-red-500 px-0.5 text-[0.5rem] font-bold leading-none text-white">
                   {tabUnread > 99 ? "99+" : tabUnread}
                 </span>
               )}

@@ -52,8 +52,15 @@ if errorlevel 1 (
 if not exist ".git" goto :skip_update
 echo  [..] Checking for updates...
 for /f "tokens=*" %%i in ('git rev-parse HEAD 2^>nul') do set "OLD_HEAD=%%i"
+:: Stash any local changes so pull doesn't fail
+set "STASHED=0"
+git diff --quiet >nul 2>&1
+if errorlevel 1 (
+    git stash push -q -m "auto-stash before update" >nul 2>&1 && set "STASHED=1"
+)
 git pull >nul 2>&1
 if errorlevel 1 (
+    if "!STASHED!"=="1" git stash pop -q >nul 2>&1
     echo  [WARN] Could not check for updates. Continuing with current version.
     goto :skip_update
 )
@@ -62,6 +69,7 @@ if "!OLD_HEAD!"=="!NEW_HEAD!" (
     echo  [OK] Already up to date
     goto :skip_update
 )
+if "!STASHED!"=="1" git stash pop -q >nul 2>&1
 echo  [OK] Updated to latest version
 echo  [..] Reinstalling dependencies...
 call pnpm install

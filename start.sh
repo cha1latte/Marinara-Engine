@@ -50,6 +50,11 @@ echo "  [OK] pnpm ${PNPM_VERSION} ready"
 if [ -d ".git" ]; then
     echo "  [..] Checking for updates..."
     OLD_HEAD=$(git rev-parse HEAD 2>/dev/null)
+    # Stash any local changes (e.g. pnpm install modifying package.json) so pull doesn't fail
+    STASHED=0
+    if ! git diff --quiet 2>/dev/null; then
+        git stash push -q -m "auto-stash before update" 2>/dev/null && STASHED=1
+    fi
     if git pull 2>/dev/null; then
         NEW_HEAD=$(git rev-parse HEAD 2>/dev/null)
         if [ "$OLD_HEAD" != "$NEW_HEAD" ]; then
@@ -64,6 +69,10 @@ if [ -d ".git" ]; then
         fi
     else
         echo "  [WARN] Could not check for updates (no internet?). Continuing with current version."
+    fi
+    # Restore stashed changes
+    if [ "$STASHED" = "1" ]; then
+        git stash pop -q 2>/dev/null || true
     fi
 fi
 

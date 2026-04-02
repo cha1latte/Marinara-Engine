@@ -973,6 +973,19 @@ export function useGenerate() {
         if (persistedMessages.size > 0) {
           upsertPersistedMessages(qc, params.chatId, [...persistedMessages.values()]);
         }
+        // Refresh game state from DB so the HUD shows the correct tracker data
+        // for the active swipe. SSE game_state_patch events update the store
+        // during generation, but React scheduling / streaming can cause them
+        // to not fully propagate — this authoritative DB fetch ensures the
+        // final state is always correct (especially after swipe regeneration).
+        api
+          .get<import("@marinara-engine/shared").GameState | null>(
+            `/chats/${params.chatId}/game-state`,
+          )
+          .then((gs) => {
+            if (gs) useGameStateStore.getState().setGameState(gs);
+          })
+          .catch(() => {});
         // Re-sort sidebar so this chat floats to the top
         qc.invalidateQueries({ queryKey: chatKeys.list() });
         // If the user navigated away from this chat during generation,
@@ -1268,6 +1281,15 @@ export function useGenerate() {
       } finally {
         setProcessing(false);
         useChatStore.getState().setAbortController(chatId, null);
+        // Refresh game state from DB for the same reason as normal generation
+        api
+          .get<import("@marinara-engine/shared").GameState | null>(
+            `/chats/${chatId}/game-state`,
+          )
+          .then((gs) => {
+            if (gs) useGameStateStore.getState().setGameState(gs);
+          })
+          .catch(() => {});
       }
     },
     [

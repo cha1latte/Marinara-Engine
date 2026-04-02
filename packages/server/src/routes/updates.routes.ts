@@ -242,11 +242,34 @@ export async function updatesRoutes(app: FastifyInstance) {
     const root = getMonorepoRoot();
 
     try {
+      // Step 0: stash local changes (pnpm install can modify package.json on some platforms)
+      let stashed = false;
+      try {
+        const { stdout: diffOut } = await execFileAsync("git", ["diff", "--quiet"], { cwd: root, timeout: 5_000 }).catch(() => ({ stdout: "dirty" }));
+        if (diffOut === "dirty") {
+          await execFileAsync("git", ["stash", "push", "-q", "-m", "auto-stash before update"], { cwd: root, timeout: 10_000 });
+          stashed = true;
+        }
+      } catch { /* clean tree — nothing to stash */ }
+
       // Step 1: git pull
-      const { stdout: pullOut } = await execFileAsync("git", ["pull"], {
-        cwd: root,
-        timeout: 60_000,
-      });
+      let pullOut: string;
+      try {
+        const result = await execFileAsync("git", ["pull"], {
+          cwd: root,
+          timeout: 60_000,
+        });
+        pullOut = result.stdout;
+      } catch (pullErr) {
+        // Restore stash before re-throwing
+        if (stashed) await execFileAsync("git", ["stash", "pop", "-q"], { cwd: root, timeout: 10_000 }).catch(() => {});
+        throw pullErr;
+      }
+
+      // Restore stashed changes after successful pull
+      if (stashed) {
+        await execFileAsync("git", ["stash", "pop", "-q"], { cwd: root, timeout: 10_000 }).catch(() => {});
+      }
 
       const alreadyUpToDate = pullOut.includes("Already up to date");
 

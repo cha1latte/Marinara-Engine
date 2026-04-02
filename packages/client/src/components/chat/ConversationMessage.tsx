@@ -511,40 +511,60 @@ export const ConversationMessage = memo(function ConversationMessage({
           }
 
           return (
-            <div key={i} className={cn("flex gap-4 animate-[fadeSlideIn_0.4s_ease-out]", i > 0 && "mt-3")}>
-              {/* Avatar */}
-              <div className="w-10 flex-shrink-0">
-                <div className="h-10 w-10 overflow-hidden rounded-full bg-[var(--accent)]">
-                  {segAvatar ? (
-                    <img src={segAvatar} alt={segName} loading="lazy" className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-sm font-bold text-[var(--muted-foreground)]">
-                      {segName[0]?.toUpperCase()}
+            <div key={i} className={cn("animate-[fadeSlideIn_0.4s_ease-out]", i > 0 && "mt-3")}>
+              {/* First row: Avatar + Name + first paragraph */}
+              {(() => {
+                // Split into paragraphs (on blank lines) for Discord-style compact display
+                const paragraphs = combinedText.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+                if (paragraphs.length === 0) return null;
+                return (
+                  <>
+                    <div className="flex gap-4">
+                      {/* Avatar */}
+                      <div className="w-10 flex-shrink-0">
+                        <div className="h-10 w-10 overflow-hidden rounded-full bg-[var(--accent)]">
+                          {segAvatar ? (
+                            <img src={segAvatar} alt={segName} loading="lazy" className="h-full w-full object-cover" />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-sm font-bold text-[var(--muted-foreground)]">
+                              {segName[0]?.toUpperCase()}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      {/* Name + first paragraph */}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-baseline gap-2 mb-0.5">
+                          <span
+                            className="text-[0.9375rem] font-semibold leading-tight hover:underline cursor-default"
+                            style={nameColorStyle(segColor)}
+                          >
+                            {segName}
+                          </span>
+                          {isFirst && (
+                            <span className="text-[0.6875rem] text-[var(--muted-foreground)]/60">
+                              {formatTimestamp(message.createdAt)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[0.9375rem] leading-relaxed break-words whitespace-pre-wrap">
+                          {mentionNames.length
+                            ? highlightMentions(applyInlineMarkdown(paragraphs[0]!, `gs${i}_0`), mentionNames, `gs${i}_0`)
+                            : applyInlineMarkdown(paragraphs[0]!, `gs${i}_0`)}
+                        </div>
+                      </div>
                     </div>
-                  )}
-                </div>
-              </div>
-              {/* Name + content */}
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline gap-2 mb-0.5">
-                  <span
-                    className="text-[0.9375rem] font-semibold leading-tight hover:underline cursor-default"
-                    style={nameColorStyle(segColor)}
-                  >
-                    {segName}
-                  </span>
-                  {isFirst && (
-                    <span className="text-[0.6875rem] text-[var(--muted-foreground)]/60">
-                      {formatTimestamp(message.createdAt)}
-                    </span>
-                  )}
-                </div>
-                <div className="text-[0.9375rem] leading-relaxed break-words whitespace-pre-wrap">
-                  {mentionNames.length
-                    ? highlightMentions(applyInlineMarkdown(combinedText, `gs${i}`), mentionNames, `gs${i}`)
-                    : applyInlineMarkdown(combinedText, `gs${i}`)}
-                </div>
-              </div>
+                    {/* Subsequent paragraphs — indented to align with text (no avatar/name) */}
+                    {paragraphs.slice(1).map((para, pi) => (
+                      <div key={pi} className="pl-14 mt-0.5 text-[0.9375rem] leading-relaxed break-words whitespace-pre-wrap">
+                        {mentionNames.length
+                          ? highlightMentions(applyInlineMarkdown(para, `gs${i}_${pi + 1}`), mentionNames, `gs${i}_${pi + 1}`)
+                          : applyInlineMarkdown(para, `gs${i}_${pi + 1}`)}
+                      </div>
+                    ))}
+                  </>
+                );
+              })()}
             </div>
           );
         })}

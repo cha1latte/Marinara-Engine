@@ -3120,14 +3120,24 @@ export async function generateRoutes(app: FastifyInstance) {
             }
           }
 
-          // Stream tokens in real-time via onToken callback
+          // Stream tokens in real-time via onToken callback.
+          // Some providers (e.g. Gemini with thinking) return the entire response
+          // in one chunk. Break large chunks into small pieces so the client sees
+          // progressive streaming instead of the whole message appearing at once.
+          const STREAM_CHUNK = 6;
           const onToken = (chunk: string) => {
             // If the request has been aborted, skip emitting any further tokens.
             if (abortController.signal.aborted) {
               return;
             }
             fullResponse += chunk;
-            reply.raw.write(`data: ${JSON.stringify({ type: "token", data: chunk })}\n\n`);
+            if (chunk.length <= STREAM_CHUNK) {
+              reply.raw.write(`data: ${JSON.stringify({ type: "token", data: chunk })}\n\n`);
+            } else {
+              for (let i = 0; i < chunk.length; i += STREAM_CHUNK) {
+                reply.raw.write(`data: ${JSON.stringify({ type: "token", data: chunk.slice(i, i + STREAM_CHUNK) })}\n\n`);
+              }
+            }
           };
 
           for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
@@ -3315,7 +3325,16 @@ export async function generateRoutes(app: FastifyInstance) {
           let result = await gen.next();
           while (!result.done) {
             fullResponse += result.value;
-            reply.raw.write(`data: ${JSON.stringify({ type: "token", data: result.value })}\n\n`);
+            // Break large chunks (e.g. Gemini non-streaming) into small pieces
+            // so the client sees progressive streaming.
+            const val = result.value;
+            if (val.length <= 6) {
+              reply.raw.write(`data: ${JSON.stringify({ type: "token", data: val })}\n\n`);
+            } else {
+              for (let i = 0; i < val.length; i += 6) {
+                reply.raw.write(`data: ${JSON.stringify({ type: "token", data: val.slice(i, i + 6) })}\n\n`);
+              }
+            }
             result = await gen.next();
           }
           // Generator return value contains usage
