@@ -7,11 +7,15 @@ import { execFile } from "child_process";
 import { existsSync } from "fs";
 import { resolve } from "path";
 import { promisify } from "util";
+import { getMonorepoRoot } from "../config/runtime-config.js";
 
 const execFileAsync = promisify(execFile);
 
 const GITHUB_REPO = "SpicyMarinara/Marinara-Engine";
-const GITHUB_API = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
+const GITHUB_REPO_URL = `https://github.com/${GITHUB_REPO}`;
+const GITHUB_API_BASE = `https://api.github.com/repos/${GITHUB_REPO}`;
+const GITHUB_TAGS_API = `${GITHUB_API_BASE}/git/matching-refs/tags/v`;
+const GITHUB_RELEASE_BY_TAG_API = (tag: string) => `${GITHUB_API_BASE}/releases/tags/${tag}`;
 
 // ── Cached release info (15-min TTL) ──
 let cachedRelease: {
@@ -25,14 +29,8 @@ const CACHE_TTL_MS = 15 * 60_000;
 
 /** Detect whether this install is a git repo. */
 function isGitInstall(): boolean {
-  // Walk up from packages/server/dist to monorepo root
-  const monorepoRoot = resolve(process.cwd(), "..", "..");
+  const monorepoRoot = getMonorepoRoot();
   return existsSync(resolve(monorepoRoot, ".git"));
-}
-
-/** Get the monorepo root (two levels up from packages/server). */
-function getMonorepoRoot(): string {
-  return resolve(process.cwd(), "..", "..");
 }
 
 /** Compare semver strings. Returns true if b > a. */
@@ -49,10 +47,94 @@ function isNewerVersion(current: string, latest: string): boolean {
   return false;
 }
 
+function compareVersions(a: string, b: string): number {
+  const parse = (v: string) => v.replace(/^v/, "").split(".").map(Number);
+  const left = parse(a);
+  const right = parse(b);
+
+  for (let i = 0; i < Math.max(left.length, right.length); i++) {
+    const lv = left[i] ?? 0;
+    const rv = right[i] ?? 0;
+    if (lv > rv) return 1;
+    if (lv < rv) return -1;
+  }
+
+  return 0;
+}
+
+function normalizeTag(tag: string) {
+  return tag.replace(/^v/, "");
+}
+
+function isStableVersionTag(tag: string) {
+  return /^v\d+\.\d+\.\d+$/.test(tag.trim());
+}
+
+function buildFallbackRelease(tag: string) {
+  return {
+    latestVersion: normalizeTag(tag),
+    releaseUrl: `${GITHUB_REPO_URL}/releases/tag/${tag}`,
+    releaseNotes: "",
+    publishedAt: "",
+  };
+}
+
+function buildRequestHeaders() {
+  return {
+    Accept: "application/vnd.github.v3+json",
+    "User-Agent": `MarinaraEngine/${APP_VERSION}`,
+  };
+}
+
+async function resolveLatestReleaseFromGitHub(signal: AbortSignal) {
+  const tagsRes = await fetch(GITHUB_TAGS_API, {
+    headers: buildRequestHeaders(),
+    signal,
+  });
+
+  if (!tagsRes.ok) {
+    throw new Error(`GitHub tags API returned ${tagsRes.status}`);
+  }
+
+  const tagRefs = (await tagsRes.json()) as Array<{ ref?: string }>;
+  const latestTag = tagRefs
+    .map((entry) => entry.ref?.split("/").pop()?.trim() ?? "")
+    .filter(isStableVersionTag)
+    .sort(compareVersions)
+    .at(-1);
+
+  if (!latestTag) {
+    throw new Error("No stable vX.Y.Z tags were found on GitHub");
+  }
+
+  const releaseRes = await fetch(GITHUB_RELEASE_BY_TAG_API(latestTag), {
+    headers: buildRequestHeaders(),
+    signal,
+  });
+
+  if (!releaseRes.ok) {
+    return buildFallbackRelease(latestTag);
+  }
+
+  const release = (await releaseRes.json()) as {
+    html_url?: string;
+    body?: string;
+    published_at?: string;
+  };
+
+  return {
+    latestVersion: normalizeTag(latestTag),
+    releaseUrl: release.html_url ?? `${GITHUB_REPO_URL}/releases/tag/${latestTag}`,
+    releaseNotes: release.body ?? "",
+    publishedAt: release.published_at ?? "",
+  };
+}
+
 export async function updatesRoutes(app: FastifyInstance) {
   // ── Check for updates ──
   // GET /api/updates/check
-  // Fetches the latest release from GitHub, caches for 15 minutes.
+  // Fetches the newest stable Git tag from GitHub, then hydrates it
+  // with matching release metadata when that release exists.
   app.get("/check", async (_req, reply) => {
     const now = Date.now();
 
@@ -69,44 +151,17 @@ export async function updatesRoutes(app: FastifyInstance) {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 10_000);
-
-      const res = await fetch(GITHUB_API, {
-        headers: {
-          Accept: "application/vnd.github.v3+json",
-          "User-Agent": `MarinaraEngine/${APP_VERSION}`,
-        },
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
-
-      if (!res.ok) {
-        return reply.status(502).send({
-          error: `GitHub API returned ${res.status}`,
-          currentVersion: APP_VERSION,
-          updateAvailable: false,
-        });
+      try {
+        cachedRelease = await resolveLatestReleaseFromGitHub(controller.signal);
+      } finally {
+        clearTimeout(timeout);
       }
-
-      const data = (await res.json()) as {
-        tag_name: string;
-        html_url: string;
-        body: string;
-        published_at: string;
-      };
-
-      const latestVersion = data.tag_name.replace(/^v/, "");
-      cachedRelease = {
-        latestVersion,
-        releaseUrl: data.html_url,
-        releaseNotes: data.body ?? "",
-        publishedAt: data.published_at,
-      };
       cacheTimestamp = now;
 
       return {
         currentVersion: APP_VERSION,
         ...cachedRelease,
-        updateAvailable: isNewerVersion(APP_VERSION, latestVersion),
+        updateAvailable: isNewerVersion(APP_VERSION, cachedRelease.latestVersion),
         installType: isGitInstall() ? "git" : "standalone",
       };
     } catch (err: unknown) {

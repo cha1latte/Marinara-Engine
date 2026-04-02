@@ -9,6 +9,7 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 ### Added
 
 - Added `pnpm check`, version-sync helpers, and PR CI checks for version drift.
+- Added tracked-installer and release-note scripts plus a GitHub release workflow driven by `CHANGELOG.md`.
 
 ### Changed
 
@@ -28,6 +29,8 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 - Sidebar tab text metrics were made explicit so descenders like the `y` in `Roleplay` no longer clip.
 - Default log level changed to `warn` to reduce console noise.
 - Cross-post redirect handling corrected.
+- Restored local data-path compatibility so existing installs continue to resolve storage under `packages/server/data`.
+- Update checks now resolve the newest GitHub `v*` tag even when `releases/latest` is stale.
 
 ## [1.4.7]
 

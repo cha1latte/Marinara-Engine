@@ -26,6 +26,8 @@
     "test": "pnpm -r run test",
     "version:sync": "node ./scripts/sync-version.mjs",
     "version:check": "node ./scripts/check-version-drift.mjs",
+    "guard:installer-artifacts": "node ./scripts/check-tracked-installers.mjs",
+    "release:notes": "node ./scripts/render-release-notes.mjs",
     "db:push": "pnpm --filter @marinara-engine/server db:push",
     "db:generate": "pnpm --filter @marinara-engine/server db:generate",
     "db:migrate": "pnpm --filter @marinara-engine/server db:migrate",

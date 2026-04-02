@@ -103,9 +103,11 @@ Android policy:
 Release-related behavior already in the repo:
 
 - Docker publishing is triggered by `v*` tags.
-- The server update check reads the latest GitHub Release tag and compares it to `APP_VERSION`.
+- Tagged releases are published from `CHANGELOG.md` by the GitHub release workflow.
+- The server update check reads the newest GitHub `v*` tag and uses matching release metadata when it exists.
 - Git-based installs can apply updates automatically; Docker installs are prompted with the pull command instead.
-- Pull request CI runs `pnpm check` and `pnpm version:check`.
+- Pull request CI runs `pnpm check`, `pnpm version:check`, and the tracked-installer guard.
+- Built installer binaries belong on GitHub Releases and should not be committed back into the repository.
 
 Standard release flow:
 
@@ -113,12 +115,14 @@ Standard release flow:
 2. Run `pnpm version:sync -- --android-version-code <next-code>` to sync all derived version fields.
 3. Update `CHANGELOG.md`.
 4. Create and push the tag `vX.Y.Z`.
-5. Publish the GitHub Release from the corresponding changelog entry.
+5. Let the release workflow publish or update the GitHub Release from the matching changelog entry.
 
 Release helpers now in the repo:
 
 - `pnpm version:sync -- --android-version-code <next-code>` updates the derived version files and README release references from the root `package.json` version.
 - `pnpm version:check` fails when those derived files drift out of sync.
+- `pnpm guard:installer-artifacts` fails when tracked installer binaries appear under `installer/*.exe`.
+- `pnpm release:notes -- <version>` renders the matching `CHANGELOG.md` entry for release publication.
 
 ## Immediate Way Forward
 

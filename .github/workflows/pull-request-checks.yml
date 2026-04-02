@@ -31,3 +31,6 @@ jobs:
 
       - name: Check version drift
         run: pnpm version:check
+
+      - name: Check tracked installer artifacts
+        run: pnpm guard:installer-artifacts

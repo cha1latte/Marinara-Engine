@@ -2,10 +2,11 @@
 // Routes: Admin (clear data, maintenance)
 // ──────────────────────────────────────────────
 import type { FastifyInstance } from "fastify";
-import { existsSync, readdirSync, unlinkSync, rmSync } from "fs";
+import { existsSync, readdirSync, rmSync } from "fs";
 import { join } from "path";
 import { DATA_DIR } from "../utils/data-dir.js";
 import * as schema from "../db/schema/index.js";
+import { getAdminSecret } from "../config/runtime-config.js";
 
 function clearDirectory(dirPath: string) {
   if (!existsSync(dirPath)) return 0;
@@ -32,7 +33,7 @@ export async function adminRoutes(app: FastifyInstance) {
     }
 
     // Require ADMIN_SECRET if configured (strongly recommended)
-    const adminSecret = process.env.ADMIN_SECRET;
+    const adminSecret = getAdminSecret();
     if (adminSecret) {
       const provided = (req.headers["x-admin-secret"] as string) ?? "";
       if (provided !== adminSecret) {

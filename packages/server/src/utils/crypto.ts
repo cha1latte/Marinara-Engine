@@ -5,6 +5,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { DATA_DIR } from "./data-dir.js";
+import { getEncryptionKeyOverride } from "../config/runtime-config.js";
 
 const ALGORITHM = "aes-256-gcm";
 
@@ -22,7 +23,7 @@ function getEncryptionKey(): Buffer {
   if (cachedKey) return cachedKey;
 
   // 1. Env var takes priority
-  const envKey = process.env.ENCRYPTION_KEY;
+  const envKey = getEncryptionKeyOverride();
   if (envKey) {
     cachedKey = Buffer.from(envKey, "hex");
     return cachedKey;
