@@ -198,8 +198,8 @@ If you prefer to build the image yourself:
 ```bash
 git clone https://github.com/SpicyMarinara/Marinara-Engine.git
 cd Marinara-Engine
-docker build -t Marinara-Engine .
-docker run -d -p 7860:7860 -v marinara-data:/app/data Marinara-Engine
+docker build -t marinara-engine .
+docker run -d -p 7860:7860 -v marinara-data:/app/data marinara-engine
 ```
 
 #### Podman
