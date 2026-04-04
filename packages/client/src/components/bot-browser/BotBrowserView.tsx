@@ -139,6 +139,52 @@ const STAT_ICONS = {
 };
 
 // ════════════════════════════════════════════════
+// LocalStorage persistence helpers
+// ════════════════════════════════════════════════
+
+const STORAGE_KEY = "marinara-bot-browser";
+
+interface BrowserPersist {
+  nsfw: Record<string, boolean>;
+  logins: Record<string, boolean>;
+  lastSource?: string;
+}
+
+function loadPersist(): BrowserPersist {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return { nsfw: {}, logins: {} };
+}
+
+function savePersist(data: BrowserPersist) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch { /* ignore */ }
+}
+
+function getPersistNsfw(sourceId: string): boolean {
+  return loadPersist().nsfw[sourceId] ?? false;
+}
+
+function setPersistNsfw(sourceId: string, value: boolean) {
+  const data = loadPersist();
+  data.nsfw[sourceId] = value;
+  savePersist(data);
+}
+
+function getPersistLogin(sourceId: string): boolean {
+  return loadPersist().logins[sourceId] ?? false;
+}
+
+function setPersistLogin(sourceId: string, value: boolean) {
+  const data = loadPersist();
+  data.logins[sourceId] = value;
+  savePersist(data);
+}
+
+// ════════════════════════════════════════════════
 // JannyAI tag map
 // ════════════════════════════════════════════════
 
@@ -1080,7 +1126,13 @@ export function BotBrowserView() {
   const [sort, setSort] = useState(provider.defaultSort);
   const [sortAsc, setSortAsc] = useState(false);
   const [page, setPage] = useState(1);
-  const [nsfw, setNsfw] = useState(false);
+  const [nsfw, setNsfwRaw] = useState(() => getPersistNsfw("chub"));
+  const sourceIdRef = useRef(sourceId);
+  sourceIdRef.current = sourceId;
+  const setNsfw = useCallback((val: boolean) => {
+    setNsfwRaw(val);
+    setPersistNsfw(sourceIdRef.current, val);
+  }, []);
 
   const [tagSearch, setTagSearch] = useState("");
   const [includeTags, setIncludeTags] = useState<string[]>([]);
@@ -1106,35 +1158,37 @@ export function BotBrowserView() {
 
   // ── Auth state ──
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [pygLoggedIn, setPygLoggedIn] = useState(false);
-  const [ctLoggedIn, setCtLoggedIn] = useState(false);
-  const [janitorLoggedIn, setJanitorLoggedIn] = useState(false);
+  const [pygLoggedIn, setPygLoggedInRaw] = useState(() => getPersistLogin("pygmalion"));
+  const [ctLoggedIn, setCtLoggedInRaw] = useState(() => getPersistLogin("chartavern"));
+  const [janitorLoggedIn, setJanitorLoggedInRaw] = useState(() => getPersistLogin("janitor"));
   const [loginLoading, setLoginLoading] = useState(false);
+
+  const setPygLoggedIn = useCallback((val: boolean) => { setPygLoggedInRaw(val); setPersistLogin("pygmalion", val); }, []);
+  const setCtLoggedIn = useCallback((val: boolean) => { setCtLoggedInRaw(val); setPersistLogin("chartavern", val); }, []);
+  const setJanitorLoggedIn = useCallback((val: boolean) => { setJanitorLoggedInRaw(val); setPersistLogin("janitor", val); }, []);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
 
 
-  // ── Check auth sessions on mount ──
+  // ── Check auth sessions on mount — keep persisted login state, server sessions are ephemeral ──
   useEffect(() => {
+    // We intentionally do NOT clear persisted login state when server says inactive.
+    // Server sessions (Pygmalion, JanitorAI) are in-memory and lost on restart.
+    // The persisted state just remembers "user has logged in before" so the UI
+    // stays consistent. The actual token will be re-validated on use.
     fetch("/api/bot-browser/pygmalion/session")
       .then((r) => r.json())
-      .then((d) => {
-        if (d?.active) setPygLoggedIn(true);
-      })
+      .then((d) => { if (d?.active) setPygLoggedIn(true); })
       .catch(() => {});
     fetch("/api/bot-browser/chartavern/session")
       .then((r) => r.json())
-      .then((d) => {
-        if (d?.active) setCtLoggedIn(true);
-      })
+      .then((d) => { if (d?.active) setCtLoggedIn(true); })
       .catch(() => {});
     fetch("/api/bot-browser/janitor/session")
       .then((r) => r.json())
-      .then((d) => {
-        if (d?.active) setJanitorLoggedIn(true);
-      })
+      .then((d) => { if (d?.active) setJanitorLoggedIn(true); })
       .catch(() => {});
-  }, []);
+  }, [setPygLoggedIn, setCtLoggedIn, setJanitorLoggedIn]);
 
 
   // ── Dynamically update nsfwAvailable based on auth ──
@@ -1158,7 +1212,7 @@ export function BotBrowserView() {
     setSort(newProv.defaultSort);
     setSortAsc(false);
     setPage(1);
-    setNsfw(false);
+    setNsfwRaw(getPersistNsfw(newId));
     setIncludeTags([]);
     setExcludeTags([]);
     setTagSearch("");
@@ -1824,44 +1878,72 @@ export function BotBrowserView() {
                 )}
 
                 {/* NSFW toggle */}
-                <label
-                  className={cn(
-                    "flex select-none items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--secondary)] px-3 py-2 text-xs",
-                    effectiveNsfwAvailable ? "cursor-pointer" : "cursor-pointer opacity-50",
-                  )}
-                  title={
-                    effectiveNsfwAvailable
-                      ? "Toggle NSFW content"
-                      : provider.nsfwMode === "wyvern"
-                        ? 'Use the "Popular NSFW" sort option'
-                        : `Click to log in to ${provider.name} for NSFW content`
-                  }
-                  onClick={handleNsfwClick}
-                >
-                  <input
-                    type="checkbox"
-                    checked={nsfw}
-                    disabled={!effectiveNsfwAvailable}
-                    onChange={(e) => {
-                      if (effectiveNsfwAvailable) {
-                        setNsfw(e.target.checked);
-                        setPage(1);
+                {(() => {
+                  const isLoginProvider = provider.nsfwMode === "login";
+                  const isLoggedInForProvider = (sourceId === "pygmalion" && pygLoggedIn) || (sourceId === "chartavern" && ctLoggedIn);
+                  const nsfwGreyedOut = isLoginProvider && isLoggedInForProvider;
+                  return (
+                    <label
+                      className={cn(
+                        "flex select-none items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--secondary)] px-3 py-2 text-xs",
+                        nsfwGreyedOut
+                          ? "cursor-not-allowed opacity-40"
+                          : effectiveNsfwAvailable
+                            ? "cursor-pointer"
+                            : "cursor-pointer opacity-50",
+                      )}
+                      title={
+                        nsfwGreyedOut
+                          ? "NSFW depends on your account settings"
+                          : effectiveNsfwAvailable
+                            ? "Toggle NSFW content"
+                            : provider.nsfwMode === "wyvern"
+                              ? 'Use the "Popular NSFW" sort option'
+                              : `Click to log in to ${provider.name} for NSFW content`
                       }
-                    }}
-                    className="accent-[var(--primary)]"
-                  />{" "}
-                  NSFW
-                  {provider.nsfwMode === "login" && !effectiveNsfwAvailable && (
-                    <LogIn size="0.625rem" className="ml-0.5 opacity-70" />
-                  )}
-                </label>
+                      onClick={nsfwGreyedOut ? (e: React.MouseEvent) => e.preventDefault() : handleNsfwClick}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={nsfwGreyedOut ? true : nsfw}
+                        disabled={nsfwGreyedOut || !effectiveNsfwAvailable}
+                        onChange={(e) => {
+                          if (!nsfwGreyedOut && effectiveNsfwAvailable) {
+                            setNsfw(e.target.checked);
+                            setPage(1);
+                          }
+                        }}
+                        className="accent-[var(--primary)]"
+                      />{" "}
+                      NSFW
+                      {nsfwGreyedOut && (
+                        <span className="ml-0.5 text-[0.55rem] text-[var(--muted-foreground)]">(account)</span>
+                      )}
+                      {!nsfwGreyedOut && isLoginProvider && !effectiveNsfwAvailable && (
+                        <LogIn size="0.625rem" className="ml-0.5 opacity-70" />
+                      )}
+                    </label>
+                  );
+                })()}
 
-                {/* Login button / auth info for providers requiring login */}
+                {/* Login button / auth info / logout for providers requiring login */}
                 {provider.nsfwMode === "login" &&
                   ((sourceId === "pygmalion" && pygLoggedIn) || (sourceId === "chartavern" && ctLoggedIn) ? (
-                    <span className="flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-[0.65rem] text-emerald-400">
-                      <CheckCircle size="0.625rem" /> NSFW depends on your account settings
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-[0.65rem] text-emerald-400">
+                        <CheckCircle size="0.625rem" /> NSFW depends on your account settings
+                      </span>
+                      <button
+                        onClick={() => {
+                          if (sourceId === "pygmalion") handlePygmalionLogout();
+                          else if (sourceId === "chartavern") handleCtLogout();
+                        }}
+                        className="flex items-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--secondary)] px-2.5 py-2 text-[0.65rem] text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--destructive)]"
+                        title="Log out"
+                      >
+                        <LogOut size="0.625rem" /> Logout
+                      </button>
+                    </div>
                   ) : (
                     <button
                       onClick={() => setShowLoginModal(true)}
@@ -1877,9 +1959,18 @@ export function BotBrowserView() {
                 )}
                 {sourceId === "janitor" && (
                   janitorLoggedIn ? (
-                    <span className="flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-[0.65rem] text-emerald-400">
-                      <CheckCircle size="0.625rem" /> Logged in — definitions unlocked
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-[0.65rem] text-emerald-400">
+                        <CheckCircle size="0.625rem" /> Logged in — definitions unlocked
+                      </span>
+                      <button
+                        onClick={handleJanitorLogout}
+                        className="flex items-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--secondary)] px-2.5 py-2 text-[0.65rem] text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--destructive)]"
+                        title="Log out"
+                      >
+                        <LogOut size="0.625rem" /> Logout
+                      </button>
+                    </div>
                   ) : (
                     <button
                       onClick={() => setShowLoginModal(true)}
