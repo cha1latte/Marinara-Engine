@@ -342,6 +342,11 @@ const CREATE_TABLES: string[] = [
     updated_at TEXT NOT NULL,
     is_active TEXT NOT NULL DEFAULT 'false'
   )`,
+  `CREATE TABLE IF NOT EXISTS app_settings (
+    key TEXT PRIMARY KEY NOT NULL,
+    value TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL
+  )`,
 ];
 
 // ── Column migrations (ALTER TABLE for schema evolution) ──

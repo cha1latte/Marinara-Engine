@@ -29,6 +29,7 @@ export * from "./schemas/agent.schema.js";
 export * from "./schemas/custom-tool.schema.js";
 export * from "./schemas/regex.schema.js";
 export * from "./schemas/theme.schema.js";
+export * from "./schemas/app-settings.schema.js";
 
 // Constants
 export * from "./constants/providers.js";

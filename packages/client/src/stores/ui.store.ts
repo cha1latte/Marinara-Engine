@@ -250,6 +250,57 @@ interface UIState {
   setUserStatusManual: (status: UserStatus) => void;
 }
 
+/**
+ * Returns the subset of UI state that is synced to the server so it persists
+ * across devices and browsers. Excludes legacy migration flags, auto-computed
+ * fields (userStatus), and items tracked via their own server resources
+ * (custom themes, extensions).
+ */
+export function pickSyncedSettings(state: UIState) {
+  return {
+    sidebarOpen: state.sidebarOpen,
+    sidebarWidth: state.sidebarWidth,
+    theme: state.theme,
+    chatBackground: state.chatBackground,
+    fontSize: state.fontSize,
+    chatFontSize: state.chatFontSize,
+    fontFamily: state.fontFamily,
+    enableStreaming: state.enableStreaming,
+    streamingSpeed: state.streamingSpeed,
+    debugMode: state.debugMode,
+    messageGrouping: state.messageGrouping,
+    showTimestamps: state.showTimestamps,
+    showModelName: state.showModelName,
+    showTokenUsage: state.showTokenUsage,
+    showMessageNumbers: state.showMessageNumbers,
+    confirmBeforeDelete: state.confirmBeforeDelete,
+    messagesPerPage: state.messagesPerPage,
+    boldDialogue: state.boldDialogue,
+    narrationFontColor: state.narrationFontColor,
+    narrationOpacity: state.narrationOpacity,
+    chatFontColor: state.chatFontColor,
+    chatFontOpacity: state.chatFontOpacity,
+    textStrokeWidth: state.textStrokeWidth,
+    textStrokeColor: state.textStrokeColor,
+    visualTheme: state.visualTheme,
+    convoGradientFrom: state.convoGradientFrom,
+    convoGradientTo: state.convoGradientTo,
+    enterToSendRP: state.enterToSendRP,
+    enterToSendConvo: state.enterToSendConvo,
+    weatherEffects: state.weatherEffects,
+    hudPosition: state.hudPosition,
+    hasCompletedOnboarding: state.hasCompletedOnboarding,
+    linkApiBannerDismissed: state.linkApiBannerDismissed,
+    echoChamberSide: state.echoChamberSide,
+    userStatusManual: state.userStatusManual,
+    convoNotificationSound: state.convoNotificationSound,
+    rpNotificationSound: state.rpNotificationSound,
+    customConversationPrompt: state.customConversationPrompt,
+  };
+}
+
+export type SyncedSettings = ReturnType<typeof pickSyncedSettings>;
+
 export const useUIStore = create<UIState>()(
   persist(
     (set, get) => ({
