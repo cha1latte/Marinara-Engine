@@ -172,6 +172,8 @@ class SidecarProcessService {
       "--log-disable",
       "--ctx-size",
       String(config.contextSize),
+      "-sm",
+      "none",
     ];
 
     args.push("-ngl", String(gpuLayers));

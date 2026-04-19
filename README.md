@@ -500,6 +500,7 @@ Look for `marinara-engine.db` plus any `-wal` and `-shm` companion files. The se
 - [TheLonelyDevil9](https://github.com/TheLonelyDevil9)
 - [Ailthrim](https://github.com/joshellis625)
 - [Munimunigamer](https://github.com/munimunigamer)
+- [John](https://github.com/guybrush01)
 
 ---
 
