@@ -6,6 +6,7 @@ import { create } from "zustand";
 import type {
   SidecarConfig,
   SidecarDownloadProgress,
+  SidecarRuntimeInfo,
   SidecarStatus,
   SidecarStatusResponse,
   SidecarQuantization,
@@ -18,6 +19,7 @@ interface SidecarState {
   config: SidecarConfig;
   inferenceReady: boolean;
   modelSize: number | null;
+  runtimeInfo: SidecarRuntimeInfo | null;
   downloadProgress: SidecarDownloadProgress | null;
   /** Whether the download/setup modal is open. */
   showDownloadModal: boolean;
@@ -44,6 +46,7 @@ export const useSidecarStore = create<SidecarState>((set, get) => ({
   config: { ...SIDECAR_DEFAULT_CONFIG },
   inferenceReady: false,
   modelSize: null,
+  runtimeInfo: null,
   downloadProgress: null,
   showDownloadModal: false,
   hasBeenPrompted: localStorage.getItem(PROMPTED_KEY) === "true",
@@ -56,6 +59,7 @@ export const useSidecarStore = create<SidecarState>((set, get) => ({
         config: res.config,
         inferenceReady: res.inferenceReady,
         modelSize: res.modelSize,
+        runtimeInfo: res.runtimeInfo,
       });
     } catch {
       // Server might not support sidecar yet

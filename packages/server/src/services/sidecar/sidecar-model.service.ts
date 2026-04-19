@@ -7,15 +7,17 @@
 // ──────────────────────────────────────────────
 
 import { existsSync, mkdirSync, statSync, createWriteStream, readFileSync, writeFileSync, unlinkSync } from "fs";
-import { join } from "path";
+import { dirname, join, resolve } from "path";
 import { pipeline as streamPipeline } from "stream/promises";
 import { Readable } from "stream";
+import { fileURLToPath } from "url";
 import {
   SIDECAR_DEFAULT_CONFIG,
   SIDECAR_MODELS,
   type SidecarConfig,
   type SidecarDownloadProgress,
   type SidecarQuantization,
+  type SidecarRuntimeInfo,
   type SidecarStatus,
   type SidecarStatusResponse,
 } from "@marinara-engine/shared";
@@ -24,6 +26,10 @@ import { getDataDir } from "../../utils/data-dir.js";
 /** Directory where model files and config are stored. */
 const MODELS_DIR = join(getDataDir(), "models");
 const CONFIG_PATH = join(MODELS_DIR, "sidecar-config.json");
+const RUNTIME_INFO_PATH = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  "../../../data/models/sidecar-runtime-info.json",
+);
 
 /** Event callbacks for download progress. */
 type ProgressCallback = (progress: SidecarDownloadProgress) => void;
@@ -79,6 +85,7 @@ class SidecarModelService {
     return {
       status: this.status,
       config: { ...this.config },
+      runtimeInfo: this.getRuntimeInfo(),
       modelDownloaded: modelPath !== null && existsSync(modelPath),
       modelSize,
     };
@@ -269,6 +276,38 @@ class SidecarModelService {
     if (!info) return null;
     const filename = `gemma-4-E2B-it-${quant.toUpperCase()}.gguf`;
     return join(MODELS_DIR, filename);
+  }
+
+  private getRuntimeInfo(): SidecarRuntimeInfo | null {
+    try {
+      if (!existsSync(RUNTIME_INFO_PATH)) return null;
+
+      const raw = readFileSync(RUNTIME_INFO_PATH, "utf-8");
+      const parsed = JSON.parse(raw) as Partial<SidecarRuntimeInfo>;
+      const validStates = new Set(["ready", "fallback", "failed"]);
+      const validBackends = new Set(["gpu", "cpu", "unknown"]);
+      const validReasons = new Set(["manual_cpu", "missing_gpu_toolchain", "build_failed", "unknown"]);
+
+      if (
+        typeof parsed?.message !== "string" ||
+        typeof parsed?.updatedAt !== "string" ||
+        !validStates.has(String(parsed.state)) ||
+        !validBackends.has(String(parsed.backend)) ||
+        !validReasons.has(String(parsed.reason))
+      ) {
+        return null;
+      }
+
+      return {
+        state: parsed.state as SidecarRuntimeInfo["state"],
+        backend: parsed.backend as SidecarRuntimeInfo["backend"],
+        reason: parsed.reason as SidecarRuntimeInfo["reason"],
+        message: parsed.message,
+        updatedAt: parsed.updatedAt,
+      };
+    } catch {
+      return null;
+    }
   }
 }
 

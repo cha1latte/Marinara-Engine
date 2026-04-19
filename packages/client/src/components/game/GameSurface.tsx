@@ -2667,6 +2667,7 @@ export function GameSurface({
                       onGenerateMap={handleGenerateMap}
                       disabled={isStreaming || !narrationDone}
                       gameState={gameState}
+                      timeOfDay={gameSnapshot?.time ?? metaTime ?? null}
                     />
                   </div>
                   {/* Desktop: inline minimap */}
@@ -2677,6 +2678,7 @@ export function GameSurface({
                       onGenerateMap={handleGenerateMap}
                       disabled={isStreaming || !narrationDone}
                       gameState={gameState}
+                      timeOfDay={gameSnapshot?.time ?? metaTime ?? null}
                       chatId={activeChatId}
                       constraintsRef={hudSurfaceRef}
                     />

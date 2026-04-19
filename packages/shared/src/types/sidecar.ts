@@ -12,6 +12,24 @@ export type SidecarQuantization = "q8_0" | "q4_k_m";
 /** Current lifecycle state of the sidecar model. */
 export type SidecarStatus = "not_downloaded" | "downloading" | "downloaded" | "loading" | "ready" | "error";
 
+/** Recent native-runtime build state for the sidecar addon. */
+export type SidecarRuntimeState = "ready" | "fallback" | "failed";
+
+/** Effective backend mode for the built sidecar runtime. */
+export type SidecarRuntimeBackend = "gpu" | "cpu" | "unknown";
+
+/** Why the current runtime note exists. */
+export type SidecarRuntimeReason = "manual_cpu" | "missing_gpu_toolchain" | "build_failed" | "unknown";
+
+/** Optional runtime note emitted by the launcher/build wrapper. */
+export interface SidecarRuntimeInfo {
+  state: SidecarRuntimeState;
+  backend: SidecarRuntimeBackend;
+  reason: SidecarRuntimeReason;
+  message: string;
+  updatedAt: string;
+}
+
 /** Progress info while downloading the model GGUF. */
 export interface SidecarDownloadProgress {
   status: "downloading" | "complete" | "error";
@@ -47,6 +65,8 @@ export interface SidecarStatusResponse {
   modelDownloaded: boolean;
   /** Model file size in bytes (if downloaded). */
   modelSize: number | null;
+  /** Optional runtime build note for the native llama.cpp addon. */
+  runtimeInfo: SidecarRuntimeInfo | null;
 }
 
 // ── Scene Analysis Output ──

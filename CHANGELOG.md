@@ -4,6 +4,11 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 
 ## [1.5.1]
 
+### Added
+
+- Display of the time of the day in the game mode.
+- Custom game widgets can be moved around.
+
 ### Changed
 
 - Removed the Quests tab from Game Mode. Game sessions deliberately do not use tracker agents for quests, so the journal now focuses on the code-driven data it actually maintains to avoid excessive generations.
@@ -19,6 +24,7 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 - Map discoveries and NPC meetings now populate the journal from code-owned game state. Locations appear when discovered, and NPCs are logged when first met instead of only after a reputation change.
 - Our built-in Gemma-4 will now target available GPUs during generations.
 - Fixed Gemma-4 issues on Windows.
+- We now only install llama-cpp if you choose to host Gemma-4.
 
 ## [1.5.0]
 

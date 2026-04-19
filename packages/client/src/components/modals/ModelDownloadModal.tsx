@@ -7,7 +7,7 @@
 // ──────────────────────────────────────────────
 
 import { useState, useEffect } from "react";
-import { BrainCircuit, Check, Download, HardDrive, X, Zap } from "lucide-react";
+import { AlertTriangle, BrainCircuit, Check, Download, HardDrive, X, Zap } from "lucide-react";
 import { Modal } from "../ui/Modal.js";
 import { useSidecarStore } from "../../stores/sidecar.store.js";
 import { SIDECAR_MODELS, type SidecarQuantization } from "@marinara-engine/shared";
@@ -29,7 +29,7 @@ function formatSpeed(bytesPerSec: number): string {
 }
 
 export function ModelDownloadModal({ open, onClose }: Props) {
-  const { status, config, downloadProgress, startDownload, cancelDownload, markPrompted, fetchStatus } =
+  const { status, config, runtimeInfo, downloadProgress, startDownload, cancelDownload, markPrompted, fetchStatus } =
     useSidecarStore();
   const [selectedQuant, setSelectedQuant] = useState<SidecarQuantization>("q8_0");
   const isDownloading = downloadProgress?.status === "downloading";
@@ -89,6 +89,39 @@ export function ModelDownloadModal({ open, onClose }: Props) {
             )}
           </div>
         </div>
+
+        {runtimeInfo && (runtimeInfo.state !== "ready" || runtimeInfo.reason === "manual_cpu") && (
+          <div
+            className={`rounded-xl border p-3 ${
+              runtimeInfo.state === "failed"
+                ? "border-amber-500/30 bg-amber-500/10"
+                : runtimeInfo.state === "fallback"
+                  ? "border-sky-500/30 bg-sky-500/10"
+                  : "border-[var(--border)] bg-[var(--secondary)]/40"
+            }`}
+          >
+            <div className="flex items-start gap-2.5">
+              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-black/10">
+                <AlertTriangle size="0.875rem" className="text-current" />
+              </div>
+              <div className="flex-1">
+                <div className="text-sm font-medium">
+                  {runtimeInfo.state === "failed"
+                    ? "Local model setup is optional"
+                    : runtimeInfo.state === "fallback"
+                      ? "Local model is running in CPU mode"
+                      : "Local model is using CPU only"}
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-[var(--muted-foreground)]">{runtimeInfo.message}</p>
+                {runtimeInfo.state === "failed" && (
+                  <p className="mt-1 text-xs leading-relaxed text-[var(--muted-foreground)]">
+                    Marinara itself will still run normally. Only the optional Gemma sidecar is unavailable.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Success state — model already downloaded */}
         {isDownloaded && !isDownloading && (
