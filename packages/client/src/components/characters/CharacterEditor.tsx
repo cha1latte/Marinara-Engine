@@ -1249,12 +1249,14 @@ function CharacterGalleryTab({ characterId, characterName }: { characterId: stri
 
   const handleUpload = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      const formData = new FormData();
-      formData.append("file", file);
-      upload.mutate(formData);
-      e.target.value = "";
+      const input = e.currentTarget;
+      const files = Array.from(input.files ?? []);
+      if (files.length === 0) return;
+      upload.mutate(files, {
+        onSettled: () => {
+          input.value = "";
+        },
+      });
     },
     [upload],
   );
@@ -1284,7 +1286,7 @@ function CharacterGalleryTab({ characterId, characterName }: { characterId: stri
         subtitle="Keep reference art, alternate outfits, and other character images attached to this character even if chats get deleted."
       />
 
-      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
+      <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleUpload} />
 
       <button
         onClick={() => fileInputRef.current?.click()}
@@ -1292,7 +1294,7 @@ function CharacterGalleryTab({ characterId, characterName }: { characterId: stri
         className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[var(--border)] px-4 py-6 text-xs text-[var(--muted-foreground)] transition-all hover:border-[var(--primary)] hover:text-[var(--primary)] disabled:opacity-50"
       >
         <Upload size="1rem" />
-        {upload.isPending ? "Uploading…" : "Upload Character Image"}
+        {upload.isPending ? "Uploading…" : "Upload Character Images"}
       </button>
 
       {isLoading ? (

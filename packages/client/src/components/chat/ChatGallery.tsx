@@ -27,12 +27,14 @@ export function ChatGallery({ chatId, onIllustrate }: ChatGalleryProps) {
   const pinImage = useGalleryStore((s) => s.pinImage);
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const formData = new FormData();
-    formData.append("file", file);
-    upload.mutate(formData);
-    e.target.value = "";
+    const input = e.currentTarget;
+    const files = Array.from(input.files ?? []);
+    if (files.length === 0) return;
+    upload.mutate(files, {
+      onSettled: () => {
+        input.value = "";
+      },
+    });
   };
 
   const handleDelete = (id: string) => {
@@ -61,9 +63,9 @@ export function ChatGallery({ chatId, onIllustrate }: ChatGalleryProps) {
         className="flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[var(--border)] px-4 py-6 text-xs text-[var(--muted-foreground)] transition-all hover:border-[var(--primary)] hover:text-[var(--primary)]"
       >
         <ImagePlus size="1rem" />
-        {upload.isPending ? "Uploading…" : "Upload Image"}
+        {upload.isPending ? "Uploading…" : "Upload Images"}
       </button>
-      <input ref={fileInputRef} type="file" accept="image/*" onChange={handleUpload} className="hidden" />
+      <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleUpload} className="hidden" />
 
       {/* Loading state */}
       {isLoading && <p className="text-center text-xs text-[var(--muted-foreground)]">Loading gallery…</p>}
