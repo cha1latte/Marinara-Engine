@@ -1,0 +1,1628 @@
+/* Win95 Theme — authentic Windows 95 skin for Marinara Engine.
+ * All custom selectors are prefixed `win95-`. Engine semantic CSS vars
+ * are overridden at :root so we don't fight component-level selectors. */
+
+/* ── Palette + tokens (overrides engine vars in both light & dark) ── */
+:root,
+[data-theme="dark"],
+[data-theme="light"] {
+  --win95-face: #c0c0c0;
+  --win95-light: #dfdfdf;
+  --win95-hilite: #ffffff;
+  --win95-shadow: #808080;
+  --win95-dark: #404040;
+  --win95-text: #000000;
+  --win95-disabled-text: #808080;
+  --win95-title-active-1: #000080;
+  --win95-title-active-2: #1084d0;
+  --win95-title-inactive-1: #808080;
+  --win95-title-inactive-2: #b5b5b5;
+  --win95-selection-bg: #000080;
+  --win95-selection-fg: #ffffff;
+  --win95-link: #0000ee;
+
+  /* Engine semantic tokens — re-pointed at the Win95 palette */
+  --background: var(--win95-face);
+  --foreground: var(--win95-text);
+  --card: var(--win95-face);
+  --card-foreground: var(--win95-text);
+  --popover: var(--win95-face);
+  --popover-foreground: var(--win95-text);
+  --primary: var(--win95-title-active-1);
+  --primary-foreground: var(--win95-hilite);
+  --secondary: var(--win95-face);
+  --secondary-foreground: var(--win95-text);
+  --muted: var(--win95-face);
+  --muted-foreground: var(--win95-shadow);
+  --accent: #d4d0c8;
+  --accent-foreground: var(--win95-text);
+  --destructive: #aa0000;
+  --destructive-foreground: var(--win95-hilite);
+  --border: var(--win95-shadow);
+  --input: var(--win95-hilite);
+  --ring: var(--win95-title-active-1);
+
+  --sidebar: var(--win95-face);
+  --sidebar-foreground: var(--win95-text);
+  --sidebar-border: var(--win95-shadow);
+  --sidebar-accent: var(--win95-title-active-1);
+  --sidebar-accent-foreground: var(--win95-hilite);
+
+  --radius: 0;
+
+  --font-y2k:
+    "MS Sans Serif", "Pixelated MS Sans Serif", "Microsoft Sans Serif",
+    Tahoma, Geneva, sans-serif;
+
+  --app-font-size: 0.75rem;
+
+  color-scheme: light;
+}
+
+/* Selection highlight is a global signature of the theme. */
+::selection {
+  background: var(--win95-selection-bg);
+  color: var(--win95-selection-fg);
+}
+
+/* ── Reusable bevels ────────────────────────────────────────────────
+ * win95-raised  — buttons & windows in their default (un-pressed) state
+ * win95-sunken  — inputs, status bars, content wells
+ * win95-pressed — buttons in :active
+ * Applied as classes (own elements) and as base styles for engine
+ * primitives via attribute selectors below. */
+.win95-raised {
+  border: 2px solid;
+  border-top-color: var(--win95-light);
+  border-left-color: var(--win95-light);
+  border-right-color: var(--win95-dark);
+  border-bottom-color: var(--win95-dark);
+  box-shadow:
+    inset 1px 1px 0 var(--win95-hilite),
+    inset -1px -1px 0 var(--win95-shadow);
+  background: var(--win95-face);
+  border-radius: 0;
+}
+
+.win95-sunken {
+  border: 2px solid;
+  border-top-color: var(--win95-shadow);
+  border-left-color: var(--win95-shadow);
+  border-right-color: var(--win95-hilite);
+  border-bottom-color: var(--win95-hilite);
+  box-shadow:
+    inset 1px 1px 0 var(--win95-dark),
+    inset -1px -1px 0 var(--win95-light);
+  background: var(--win95-hilite);
+  border-radius: 0;
+}
+
+.win95-pressed {
+  border-top-color: var(--win95-dark);
+  border-left-color: var(--win95-dark);
+  border-right-color: var(--win95-light);
+  border-bottom-color: var(--win95-light);
+  box-shadow:
+    inset 1px 1px 0 var(--win95-shadow),
+    inset -1px -1px 0 var(--win95-hilite);
+}
+
+/* ── Window chrome (added by JS as siblings of React content) ────── */
+.win95-titlebar {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  right: 2px;
+  height: 22px;
+  padding: 2px 3px 2px 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: linear-gradient(
+    to right,
+    var(--win95-title-active-1) 0%,
+    var(--win95-title-active-2) 100%
+  );
+  color: var(--win95-hilite);
+  font-family: var(--font-y2k);
+  font-size: 11px;
+  font-weight: 700;
+  z-index: 5;
+  user-select: none;
+  pointer-events: none;
+}
+
+.win95-titlebar.is-inactive {
+  background: linear-gradient(
+    to right,
+    var(--win95-title-inactive-1) 0%,
+    var(--win95-title-inactive-2) 100%
+  );
+}
+
+.win95-titlebar-title {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.2px;
+}
+
+.win95-titlebar-buttons {
+  display: flex;
+  gap: 2px;
+  pointer-events: auto;
+}
+
+.win95-titlebar-btn {
+  width: 16px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Marlett", "Segoe UI Symbol", sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--win95-text);
+  background: var(--win95-face);
+  border: 1px solid;
+  border-top-color: var(--win95-light);
+  border-left-color: var(--win95-light);
+  border-right-color: var(--win95-dark);
+  border-bottom-color: var(--win95-dark);
+  box-shadow:
+    inset 1px 1px 0 var(--win95-hilite),
+    inset -1px -1px 0 var(--win95-shadow);
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.win95-titlebar-btn:active {
+  border-top-color: var(--win95-dark);
+  border-left-color: var(--win95-dark);
+  border-right-color: var(--win95-light);
+  border-bottom-color: var(--win95-light);
+  box-shadow:
+    inset 1px 1px 0 var(--win95-shadow),
+    inset -1px -1px 0 var(--win95-hilite);
+}
+
+.win95-statusbar {
+  position: absolute;
+  bottom: 2px;
+  left: 2px;
+  right: 2px;
+  height: 20px;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--win95-face);
+  z-index: 5;
+  font-family: var(--font-y2k);
+  font-size: 11px;
+  color: var(--win95-text);
+  user-select: none;
+  pointer-events: none;
+}
+
+.win95-statusbar-cell {
+  flex: 1 1 auto;
+  padding: 1px 6px;
+  border: 1px solid;
+  border-top-color: var(--win95-shadow);
+  border-left-color: var(--win95-shadow);
+  border-right-color: var(--win95-hilite);
+  border-bottom-color: var(--win95-hilite);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.win95-statusbar-cell.is-fixed {
+  flex: 0 0 auto;
+}
+
+/* When a surface has been wrapped, give it the outer window bevel
+ * and reserve space for the decorative titlebar + statusbar.
+ * The right panel is skinned via CSS only (its inner header carries
+ * the title), so it isn't in this list. */
+[data-component="ChatArea.Conversation"].win95-window,
+[data-component="ChatArea.Roleplay"].win95-window,
+[data-component="ChatSidebar"].win95-window {
+  position: relative;
+  background: var(--win95-face);
+  border: 2px solid;
+  border-top-color: var(--win95-light);
+  border-left-color: var(--win95-light);
+  border-right-color: var(--win95-dark);
+  border-bottom-color: var(--win95-dark);
+  box-shadow:
+    inset 1px 1px 0 var(--win95-hilite),
+    inset -1px -1px 0 var(--win95-shadow);
+  border-radius: 0;
+  padding: 24px 4px 4px;
+}
+
+[data-component="ChatArea.Conversation"].win95-window.has-statusbar,
+[data-component="ChatArea.Roleplay"].win95-window.has-statusbar {
+  padding-bottom: 24px;
+}
+
+/* The inner `.mari-chat-area` div carries an inline-style linear
+ * gradient from the user's "Conversation theme" setting in Settings →
+ * Appearance. Inline styles win over class CSS, so we need !important
+ * here to flatten it back to the Win95 face color. Roleplay's
+ * `.rpg-chat-area` shares the same div, so this defeats both. */
+.mari-chat-area {
+  background: var(--win95-face) !important;
+}
+
+/* Roleplay surface paints two dark overlays on top of `.mari-chat-area`
+ * to give it the "immersive RPG" mood — `.rpg-overlay` (linear dark
+ * gradient) and `.rpg-vignette` (radial darkening at the edges). With
+ * the Win95 face color underneath those read as a dark vignetted
+ * gray instead of flat #c0c0c0. Make both invisible — the Win95 chrome
+ * is the mood here. */
+.rpg-overlay,
+.rpg-vignette {
+  background: none !important;
+  background-image: none !important;
+}
+
+/* Crisp message text. The engine optionally applies `WebkitTextStroke`
+ * via inline style when the user has the narration text-stroke
+ * setting enabled — produces a soft outlined look that on a Win95
+ * gray field reads as "blurry". Pin stroke off and kill any text
+ * shadow that the engine's `retro-glow-text` or theme overrides may
+ * add. Also turn off subpixel font smoothing so MS Sans Serif renders
+ * with hard pixel edges, matching the period rasterizer. */
+.mari-message-content,
+.mari-message-content * {
+  -webkit-text-stroke: 0 !important;
+  paint-order: normal !important;
+  text-shadow: none !important;
+}
+
+body,
+.mari-chat-area,
+.mari-message-content,
+.win95-titlebar,
+.win95-statusbar,
+.mari-message {
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: geometricPrecision;
+}
+
+/* Right panel: bevel only, no titlebar — its internal header has its
+ * own title + close button, so prepending another would be redundant. */
+[data-component="RightPanel"] {
+  background: var(--win95-face);
+  border: 2px solid;
+  border-top-color: var(--win95-light);
+  border-left-color: var(--win95-light);
+  border-right-color: var(--win95-dark);
+  border-bottom-color: var(--win95-dark);
+  box-shadow:
+    inset 1px 1px 0 var(--win95-hilite),
+    inset -1px -1px 0 var(--win95-shadow);
+  border-radius: 0;
+}
+
+/* Active chat row in the sidebar: hard navy + white text. The engine
+ * uses `bg-[var(--sidebar-accent)]` which our :root override resolves
+ * to navy, but the row's children re-set their own colors via Tailwind
+ * utilities — pin both layers here to guarantee the Win95 selection look. */
+[data-component="ChatSidebar"] [role="button"][data-chat-id].bg-\[var\(--sidebar-accent\)\] {
+  background: var(--win95-selection-bg) !important; /* Defeats inline/utility opacity blends. */
+  color: var(--win95-selection-fg);
+  box-shadow: none;
+}
+
+[data-component="ChatSidebar"] [role="button"][data-chat-id].bg-\[var\(--sidebar-accent\)\] * {
+  color: var(--win95-selection-fg) !important; /* Children re-set their own text colors — flatten. */
+}
+
+/* Active CONVO / RP / GM mode tab. The engine marks active tabs with
+ * `bg-[var(--sidebar-accent)]`; chat rows already use this class but
+ * are scoped via [role="button"][data-chat-id] above, so we can
+ * narrow here to plain `<button>` to hit only the mode tabs. Pressed
+ * bevel + black text reads as "this tab is selected" without
+ * fighting the navy chat-row treatment. */
+[data-component="ChatSidebar"] button.bg-\[var\(--sidebar-accent\)\] {
+  background: var(--win95-face) !important;
+  color: var(--win95-text) !important;
+  border-top-color: var(--win95-dark) !important;
+  border-left-color: var(--win95-dark) !important;
+  border-right-color: var(--win95-light) !important;
+  border-bottom-color: var(--win95-light) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--win95-shadow),
+    inset -1px -1px 0 var(--win95-hilite) !important;
+  font-weight: 700;
+}
+
+/* Message timestamps. The engine renders `.mari-message-timestamp`
+ * with `text-[var(--muted-foreground)]/50` (Roleplay) or `/60`
+ * (Conversation) — both barely legible on the Win95 face. Pin to
+ * solid Win95 text (black) so timestamps read clearly. */
+.mari-message-timestamp,
+.mari-message-meta .text-\[0\.6875rem\] {
+  color: var(--win95-text) !important;
+  opacity: 1 !important;
+  font-weight: normal !important;
+}
+
+/* Character name colors. The engine sets per-character name colors
+ * via inline `style={nameColorStyle(c)}` — solid color for hex
+ * strings, or a gradient via `WebkitBackgroundClip: text` + a
+ * transparent text fill. Both are dressed-up modern aesthetics that
+ * look out of place on a Win95 chrome. Flatten to black; defeat both
+ * the inline `color` and the gradient text-fill. */
+.mari-message-name {
+  color: var(--win95-text) !important;
+  background: none !important;
+  background-image: none !important;
+  -webkit-text-fill-color: var(--win95-text) !important;
+  background-clip: border-box !important;
+  -webkit-background-clip: border-box !important;
+}
+
+/* Sidebar chat-list avatar fallback (the letter shown when a chat
+ * has no avatar — Homer's "H", TestBot's "T", etc.). The engine
+ * paints these as `bg-[var(--secondary)] text-[var(--muted-foreground)]`
+ * which under our token overrides should already be gray-on-gray —
+ * but in practice the fallback paths can pick up character name
+ * colors / accent fills that leak orange / pink through. Pin both
+ * background and child text color so the letter always reads as
+ * black-on-Win95-face. */
+[data-component="ChatSidebar"] div.rounded-full {
+  background: var(--win95-face) !important;
+}
+
+[data-component="ChatSidebar"] div.rounded-full,
+[data-component="ChatSidebar"] div.rounded-full > * {
+  color: var(--win95-text) !important;
+}
+
+/* Purple / orange / amber Lucide icons inside the chat surfaces.
+ * Examples: `RoleplayHUDActionsMenu.tsx`'s purple Sparkles + Trash2
+ * pair (the "regen actions" buttons at the top-left of the roleplay
+ * surface), the orange "back to top" button hover, and the amber
+ * conversation-start divider. Force all to black so the chrome is
+ * monochrome — animations stay (pulse, etc.) but the color pulse
+ * becomes a contrast pulse instead of a hue cycle. */
+[data-component^="ChatArea"] svg[class*="text-purple-"],
+[data-component^="ChatArea"] svg[class*="text-pink-"],
+[data-component^="ChatArea"] svg[class*="text-orange-"],
+[data-component^="ChatArea"] svg[class*="text-amber-"],
+[data-component^="ChatArea"] svg[class*="text-violet-"],
+[data-component^="ChatArea"] svg[class*="text-rose-"],
+[data-component^="ChatArea"] [class*="text-purple-"]:not(svg),
+[data-component^="ChatArea"] [class*="text-pink-"]:not(svg),
+[data-component^="ChatArea"] [class*="text-orange-"]:not(svg),
+[data-component^="ChatArea"] [class*="text-amber-"]:not(svg),
+[data-component^="ChatArea"] [class*="text-violet-"]:not(svg),
+[data-component^="ChatArea"] [class*="text-rose-"]:not(svg) {
+  color: var(--win95-text) !important;
+  -webkit-text-fill-color: var(--win95-text) !important;
+}
+
+/* Character speaker pill at the top of the Conversation surface
+ * (ConversationView.tsx:567 — "Caveman" floating tag with status
+ * dot). Engine renders as `bg-black/30 rounded-lg backdrop-blur-sm`.
+ * The pill's avatar img has `rounded-full` directly on it, the
+ * fallback is a colored letter div. Reframe both: gray Win95 pill
+ * with a 1-px shadow border, square avatar, square fallback. */
+[data-component^="ChatArea"] [class*="bg-black"][class*="rounded-lg"] {
+  background: var(--win95-face) !important;
+  border-radius: 0 !important;
+  border: 1px solid var(--win95-shadow);
+  color: var(--win95-text);
+}
+
+[data-component^="ChatArea"] [class*="bg-black"][class*="rounded-lg"] img.rounded-full,
+[data-component^="ChatArea"] [class*="bg-black"][class*="rounded-lg"] div.rounded-full {
+  border-radius: 0 !important;
+  background: var(--win95-face) !important;
+  color: var(--win95-text) !important;
+}
+
+[data-component^="ChatArea"] [class*="bg-black"][class*="rounded-lg"] .text-foreground\/90,
+[data-component^="ChatArea"] [class*="bg-black"][class*="rounded-lg"] .text-foreground\/50 {
+  color: var(--win95-text) !important;
+}
+
+/* Roleplay user message header timestamp + index. Engine renders
+ * these as `text-white/30` / `text-white/25` (designed for the
+ * dark-mode roleplay bg). On Win95 gray that's invisible. Pin all
+ * `text-white/*` opacity variants in the chat area to solid Win95
+ * shadow gray so they read as proper secondary metadata. */
+[data-component^="ChatArea"] [class*="text-white/"]:not(.mari-message-bubble):not(.mari-message-bubble *) {
+  color: var(--win95-shadow) !important;
+}
+
+/* Import buttons in Settings → Import are <label> elements (not
+ * <button>) wrapping a hidden file input + a `bg-gradient-to-r ...
+ * ring-1 ring-emerald-500/30` (or pink/violet) frame. The earlier
+ * gradient kill caught the bg but the colored ring (Tailwind compiles
+ * `ring-*` to a box-shadow) survived. Cover labels too and pin the
+ * box-shadow to the Win95 raised bevel — kills the colored halos. */
+[data-component="RightPanel"] label[class*="bg-gradient-to"] {
+  border: 2px solid !important;
+  border-top-color: var(--win95-light) !important;
+  border-left-color: var(--win95-light) !important;
+  border-right-color: var(--win95-dark) !important;
+  border-bottom-color: var(--win95-dark) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--win95-hilite),
+    inset -1px -1px 0 var(--win95-shadow) !important;
+  --tw-ring-shadow: 0 0 transparent !important;
+  --tw-ring-color: transparent !important;
+}
+
+/* Defensive: any element that uses the gradient-text trick (inline
+ * style with `WebkitTextFillColor: transparent` + `WebkitBackgroundClip:
+ * text`) gets its text color flattened to win95-text. The engine
+ * applies this on character names in chat list rows when the
+ * character has a gradient nameColor configured (see
+ * `nameColorStyle` in ConversationMessage.tsx:30). The chat-sidebar
+ * sidebar-accent rule above pins descendants to white for the active
+ * row; this rule pins all OTHER name colors to black across panels. */
+[data-component] [style*="-webkit-text-fill-color"],
+[data-component] [style*="WebkitTextFillColor"] {
+  -webkit-text-fill-color: var(--win95-text) !important;
+  background-image: none !important;
+  background: none !important;
+  color: var(--win95-text) !important;
+}
+
+/* Roleplay-bubble text crispness. The bubbles use `text-neutral-100`
+ * (which is `#f5f5f5`, not pure white) over the navy gradient — that
+ * faint off-white at small font sizes reads as bold-and-soft. Pin
+ * pure white for crisper rendering and ensure font-smoothing is off
+ * on the bubble itself (the body-level rule earlier doesn't
+ * cascade into `.mari-message-bubble` because Tailwind utilities
+ * re-set the family on the bubble's children). */
+.mari-message-bubble,
+.mari-message-bubble * {
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.mari-message-user .mari-message-bubble:not(.texting-bubble) .mari-message-content,
+.mari-message-user .mari-message-bubble:not(.texting-bubble) .mari-message-content * {
+  color: var(--win95-hilite) !important;
+}
+
+/* Square + bevel message avatars. The Discord-style Conversation
+ * layout uses round 40×40 avatar slots. Pure round + a placeholder
+ * person icon on empty user slots reads as "broken image" against
+ * the Win95 chrome. Squaring + a sunken bevel reframes the slot as
+ * an authentic 32-bit-era portrait well. */
+/* Two avatar render paths:
+ *   (a) Message rows (Discord-style ConversationMessage / ChatMessage)
+ *       wrap the image in a `<div class="...rounded-full overflow-hidden">`
+ *       — square the wrapper, the img inside is plain.
+ *   (b) Chat sidebar list avatars put `rounded-full` directly on the
+ *       `<img>` element with no wrapper. Square the img.
+ * Both get a sunken Win95 portrait-well bevel. */
+.mari-message-avatar div.rounded-full,
+.mari-message div.rounded-full,
+[data-component="ChatSidebar"] img.rounded-full,
+[data-component="ChatSidebar"] div.rounded-full {
+  border-radius: 0 !important;
+}
+
+.mari-message-avatar > div.rounded-full,
+.mari-message-avatar > div[class*="rounded-full"] {
+  border: 2px solid;
+  border-top-color: var(--win95-shadow);
+  border-left-color: var(--win95-shadow);
+  border-right-color: var(--win95-hilite);
+  border-bottom-color: var(--win95-hilite);
+  box-shadow:
+    inset 1px 1px 0 var(--win95-dark),
+    inset -1px -1px 0 var(--win95-light);
+  background: var(--win95-face);
+}
+
+[data-component="ChatSidebar"] img.rounded-full,
+[data-component="ChatSidebar"] div.rounded-full {
+  border: 1px solid;
+  border-top-color: var(--win95-shadow);
+  border-left-color: var(--win95-shadow);
+  border-right-color: var(--win95-hilite);
+  border-bottom-color: var(--win95-hilite);
+}
+
+/* Conversation-mode message text-wells. ConversationMessage.tsx
+ * renders body text as plain `.mari-message-content` divs with no
+ * enclosing bubble — that's the engine's Discord-style design. To
+ * make the flat layout read as a period-correct Win95 message log,
+ * frame each body in a sunken white text-well. Roleplay-mode bubbles
+ * are styled separately above and aren't affected. */
+[data-component="ChatArea.Conversation"] .mari-message-content {
+  background: var(--win95-hilite);
+  color: var(--win95-text);
+  border: 1px solid;
+  border-top-color: var(--win95-shadow);
+  border-left-color: var(--win95-shadow);
+  border-right-color: var(--win95-hilite);
+  border-bottom-color: var(--win95-hilite);
+  padding: 4px 8px;
+  margin-top: 1px;
+  display: inline-block;
+  max-width: 100%;
+}
+
+/* Empty / typing-only renders should not paint a frame around an
+ * invisible cell. Hide the well when the content node is empty
+ * (typing dots only ever live in a child div, so :empty matches an
+ * actual empty render). */
+[data-component="ChatArea.Conversation"] .mari-message-content:empty {
+  display: none;
+}
+
+/* Send / Stop button — replace the modern paper-plane Lucide icon
+ * with a Win95-style labeled button. The source code (ChatInput.tsx)
+ * sets a `mari-chat-send-btn` class but in the rendered DOM the
+ * class doesn't appear — twMerge or a Tailwind v4 layer strips it.
+ * The button does carry a stable `title` attribute ("Send" / "Stop")
+ * which is what the engine flips between based on streaming state.
+ * Target by both selectors so we hit it regardless. */
+button[title="Send"],
+button[title="Stop"],
+button.mari-chat-send-btn,
+.mari-chat-input-box button[title="Send"],
+.mari-chat-input-box button[title="Stop"] {
+  width: auto !important;
+  height: auto !important;
+  min-width: 64px !important;
+  min-height: 22px !important;
+  padding: 3px 14px !important;
+}
+
+button[title="Send"] > svg,
+button[title="Stop"] > svg,
+button.mari-chat-send-btn > svg {
+  display: none !important;
+}
+
+button[title="Send"]::after {
+  content: "Send";
+  font-family: var(--font-y2k);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--win95-text);
+  letter-spacing: 0.2px;
+  display: inline-block;
+}
+
+button[title="Stop"]::after {
+  content: "Stop";
+  font-family: var(--font-y2k);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--win95-text);
+  letter-spacing: 0.2px;
+  display: inline-block;
+}
+
+button.mari-chat-send-btn::after {
+  content: "Send";
+  font-family: var(--font-y2k);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--win95-text);
+  letter-spacing: 0.2px;
+  display: inline-block;
+}
+
+button.mari-chat-send-btn:has(svg[class*="stop"])::after,
+button.mari-chat-send-btn:has(svg[class*="circle-stop"])::after {
+  content: "Stop";
+}
+
+/* Outer chat input wrapper. Engine renders as
+ *   <div className="mari-chat-input chat-input-container px-3 pb-3">
+ * with no background — the chat-surface gray shows through, leaving
+ * the inner `.mari-chat-input-box` looking like a floating pill.
+ * Frame it as a proper Win95 toolbar tray with a 1-px shadow border
+ * separating it from the message scroll above, and pin all rounded
+ * descendants to square. */
+.mari-chat-input,
+.chat-input-container {
+  background: var(--win95-face) !important;
+  border-radius: 0 !important;
+  padding: 4px !important;
+  border-top: 1px solid var(--win95-shadow) !important;
+}
+
+.mari-chat-input *,
+.chat-input-container * {
+  border-radius: 0 !important;
+}
+
+/* Chat input wrapper. Engine renders `.mari-chat-input-box` with
+ * `bg-black/40 rounded-2xl border-2` — period-incorrect. Reframe as a
+ * Win95 dialog toolbar with a raised bevel; the textarea inside gets
+ * its own sunken text-control look so the input itself reads as a
+ * single-line edit field. Inner toolbar buttons (paperclip, emoji,
+ * link, help) keep the generic Win95 button bevel and tighten up. */
+.mari-chat-input-box {
+  background: var(--win95-face) !important;
+  border: 2px solid !important;
+  border-top-color: var(--win95-light) !important;
+  border-left-color: var(--win95-light) !important;
+  border-right-color: var(--win95-dark) !important;
+  border-bottom-color: var(--win95-dark) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--win95-hilite),
+    inset -1px -1px 0 var(--win95-shadow) !important;
+  border-radius: 0 !important;
+  padding: 4px 6px !important;
+  gap: 4px !important;
+}
+
+.mari-chat-input-textarea {
+  background: var(--win95-hilite) !important;
+  color: var(--win95-text) !important;
+  border: 2px solid !important;
+  border-top-color: var(--win95-shadow) !important;
+  border-left-color: var(--win95-shadow) !important;
+  border-right-color: var(--win95-hilite) !important;
+  border-bottom-color: var(--win95-hilite) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--win95-dark),
+    inset -1px -1px 0 var(--win95-light) !important;
+  border-radius: 0 !important;
+  padding: 3px 6px !important;
+  font-family: var(--font-y2k) !important;
+  font-size: 11px !important;
+}
+
+.mari-chat-input-box button:not(.mari-chat-send-btn) {
+  width: auto !important;
+  height: auto !important;
+  min-height: 22px !important;
+  min-width: 0 !important;
+  padding: 2px 6px !important;
+}
+
+/* Persona status footer at the bottom of the chat sidebar
+ * (UserStatusFooter — green dot + "Active" / "Idle" / "DND" label).
+ * Reframe the row as a Win95 sunken status-bar cell so it visually
+ * matches the chat-area status bar at the bottom of the conversation
+ * surface. The colored status dot stays — it's tiny and reads as a
+ * period-correct LED indicator next to the label. */
+[data-component="ChatSidebar"] > div.relative.border-t {
+  background: var(--win95-face) !important;
+  padding: 2px !important;
+  border: 0 !important;
+  border-top: 1px solid var(--win95-shadow) !important;
+}
+
+[data-component="ChatSidebar"] > div.relative.border-t > button {
+  background: var(--win95-face) !important;
+  color: var(--win95-text) !important;
+  border: 1px solid !important;
+  border-top-color: var(--win95-shadow) !important;
+  border-left-color: var(--win95-shadow) !important;
+  border-right-color: var(--win95-hilite) !important;
+  border-bottom-color: var(--win95-hilite) !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  padding: 2px 6px !important;
+  min-height: 0 !important;
+  font-family: var(--font-y2k);
+  font-size: 11px;
+  text-align: left;
+}
+
+/* "+ New chat" button in the sidebar header. Engine renders it as
+ * a small icon-only button — relabel as a wider Win95 "New" button
+ * to match the Send/Stop language. Title prefix is stable: it's
+ * always "New <Mode>" (e.g. "New Conversation"). */
+.mari-sidebar-header button[title^="New "] {
+  min-width: 48px;
+  width: auto !important;
+  padding: 2px 10px !important;
+  min-height: 22px !important;
+}
+
+.mari-sidebar-header button[title^="New "] > svg {
+  display: none !important;
+}
+
+.mari-sidebar-header button[title^="New "]::after {
+  content: "New";
+  font-family: var(--font-y2k);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--win95-text);
+}
+
+/* Monochrome the right-panel resource-type accent colors. The engine
+ * paints placeholder avatar squares + action buttons + badges in the
+ * Tailwind palette (pink/orange/purple/emerald/sky) keyed to each
+ * resource type. Period-incorrect — flatten all `bg-gradient-*`
+ * elements in panels to Win95 face + sunken bevel for placeholders
+ * and Win95 button bevel for action buttons. `bg-[var(--primary)]/N`
+ * is NOT in this list — it's how active selection / chat-rows are
+ * rendered, and we already style those separately. */
+[data-component="RightPanel"] [class*="bg-gradient-to"] {
+  background: var(--win95-face) !important;
+  background-image: none !important;
+  color: var(--win95-text) !important;
+  border-radius: 0 !important;
+  text-shadow: none !important;
+}
+
+/* Action buttons (e.g. "Open Full Library", "+ New Character") use
+ * `bg-gradient-to-r` + white text + colored shadow. Defeat the shadow
+ * and re-apply the standard Win95 raised button bevel, since the
+ * generic button rule above is element-level (specificity 0,0,1) and
+ * loses to the `[class*="bg-gradient"]` rule (0,1,0). */
+[data-component="RightPanel"] button[class*="bg-gradient-to"],
+[data-component="RightPanel"] [role="button"][class*="bg-gradient-to"] {
+  border: 2px solid !important;
+  border-top-color: var(--win95-light) !important;
+  border-left-color: var(--win95-light) !important;
+  border-right-color: var(--win95-dark) !important;
+  border-bottom-color: var(--win95-dark) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--win95-hilite),
+    inset -1px -1px 0 var(--win95-shadow) !important;
+}
+
+/* Placeholder avatar squares: sunken portrait well, not raised. */
+[data-component="RightPanel"] div[class*="bg-gradient-to-br"]:not(button):not([role="button"]) {
+  border: 2px solid !important;
+  border-top-color: var(--win95-shadow) !important;
+  border-left-color: var(--win95-shadow) !important;
+  border-right-color: var(--win95-hilite) !important;
+  border-bottom-color: var(--win95-hilite) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--win95-dark),
+    inset -1px -1px 0 var(--win95-light) !important;
+}
+
+/* Colored chip / badge elements ("DEFAULT", tag chips). The engine
+ * uses `bg-purple-400/15 text-purple-400`-style faint-color pills.
+ * Reframe as Win95 monochrome chips — gray field + dark shadow text
+ * + 1-pixel sunken border. */
+[data-component="RightPanel"] span[class*="bg-purple-400"],
+[data-component="RightPanel"] span[class*="bg-pink-400"],
+[data-component="RightPanel"] span[class*="bg-amber-400"],
+[data-component="RightPanel"] span[class*="bg-orange-400"],
+[data-component="RightPanel"] span[class*="bg-rose-400"],
+[data-component="RightPanel"] span[class*="bg-violet-400"],
+[data-component="RightPanel"] span[class*="bg-fuchsia-400"],
+[data-component="RightPanel"] span[class*="bg-sky-400"] {
+  background: var(--win95-shadow) !important;
+  color: var(--win95-hilite) !important;
+  border-radius: 0 !important;
+  padding: 1px 4px !important;
+  font-family: var(--font-y2k);
+  font-size: 10px;
+  text-shadow: none !important;
+}
+
+/* Tag chips on character cards use `bg-[var(--primary)]/8` — these
+ * are scoped to span.rounded-full inside the card grid so we don't
+ * collide with the active-row chat selection (which uses a div, not
+ * span, and isn't rounded-full). */
+[data-component="RightPanel"] span.rounded-full[class*="bg-[var(--primary)]"] {
+  background: var(--win95-face) !important;
+  color: var(--win95-text) !important;
+  border: 1px solid var(--win95-shadow);
+  border-radius: 0 !important;
+  padding: 1px 4px !important;
+  font-family: var(--font-y2k);
+  font-size: 10px;
+  text-shadow: none !important;
+}
+
+/* Rainbow `.retro-divider` (animated conic gradient horizontal line)
+ * is straight Y2K — defeat with a Win95 sunken horizontal rule. */
+.retro-divider {
+  height: 2px !important;
+  margin: 8px 0 !important;
+  background: none !important;
+  border-top: 1px solid var(--win95-shadow) !important;
+  border-bottom: 1px solid var(--win95-hilite) !important;
+  border-radius: 0 !important;
+  animation: none !important;
+}
+
+/* Kill backdrop blur globally — Win95 didn't have frosted glass.
+ * The engine sprinkles `backdrop-blur-*` on top bars, modals, panel
+ * headers, and the avatar speaker pill (the "Caveman" widget that
+ * renders mid-chat). All of them collapse cleanly to flat opaque
+ * backgrounds via our Win95 palette overrides. */
+* {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* The chat input wrapper still inherits some rounded corners through
+ * Tailwind utility classes on inner elements (textarea ring, button
+ * ring backgrounds). Nuke border-radius on everything inside, since
+ * Win95 has zero rounded geometry anywhere. */
+.mari-chat-input-box,
+.mari-chat-input-box * {
+  border-radius: 0 !important;
+}
+
+/* Win95 cursor. The engine paints a Y2K pink arrow via `--cursor-pink`
+ * across body / chat / sidebar / etc. Repoint at a black-outlined
+ * white pointer (the same SVG shape the engine uses, recolored), and
+ * the cursor switches everywhere those rules apply without touching
+ * any of the engine's `cursor: var(--cursor-pink), auto` declarations. */
+:root,
+[data-theme="dark"],
+[data-theme="light"] {
+  --cursor-pink: url("data:image/svg+xml,%3Csvg width='24' height='24' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3 3L10 20L12 12L20 10L3 3Z' fill='%23FFFFFF' stroke='%23000000' stroke-width='1.5' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+/* Force the Win95 pointer on the surfaces the engine doesn't already
+ * paint with --cursor-pink — overlay/modal/dropdown surfaces, the
+ * right panel, and any deep descendants that opt into `cursor: auto`
+ * by default. Skip text inputs (they should keep the I-beam) and
+ * disabled/loading states. */
+body,
+[data-component],
+[data-component] *:not(input):not(textarea):not([disabled]):not([aria-disabled="true"]) {
+  cursor: var(--cursor-pink), default;
+}
+
+/* Right-panel tab bar (General / Appearance / Themes / Extensions /
+ * Import / Advanced). The engine renders these as flat text buttons
+ * with a small accent underline on the active one. Reframe them as
+ * Win95 dialog tabs: raised inactive, pressed-in active. We detect
+ * active via :has() over the underline span (only mounted on the
+ * active tab — see SettingsPanel.tsx). The native underline span is
+ * hidden since the bevel state already conveys selection. */
+[data-component="RightPanel"] .border-b > button {
+  background: var(--win95-face) !important;
+  color: var(--win95-text) !important;
+  border: 2px solid !important;
+  border-top-color: var(--win95-light) !important;
+  border-left-color: var(--win95-light) !important;
+  border-right-color: var(--win95-dark) !important;
+  border-bottom-color: var(--win95-dark) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--win95-hilite),
+    inset -1px -1px 0 var(--win95-shadow) !important;
+  border-radius: 0 !important;
+  padding: 3px 10px !important;
+  min-height: 0 !important;
+  margin: 0 1px 0 0;
+}
+
+[data-component="RightPanel"] .border-b > button:has(> span[class*="bg-[var(--primary)]"]) {
+  border-top-color: var(--win95-dark) !important;
+  border-left-color: var(--win95-dark) !important;
+  border-right-color: var(--win95-light) !important;
+  border-bottom-color: var(--win95-light) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--win95-shadow),
+    inset -1px -1px 0 var(--win95-hilite) !important;
+  font-weight: 700;
+}
+
+[data-component="RightPanel"] .border-b > button > span.absolute.bottom-0 {
+  display: none;
+}
+
+/* Conversation-mode message bubbles. The engine writes inline
+ * `backgroundColor: rgba(23,23,23, …)` styles on each bubble (dark-mode
+ * tuned) which collapse against our gray field; defeat with !important
+ * and re-paint in the Win95 palette. User bubbles get the title-bar
+ * gradient (selection blue), assistant bubbles get the white sunken
+ * text-well look. */
+.mari-message-bubble.texting-bubble-user {
+  background: linear-gradient(
+    to bottom,
+    var(--win95-title-active-1) 0%,
+    var(--win95-title-active-2) 100%
+  ) !important;
+  color: var(--win95-hilite) !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
+.mari-message-bubble.texting-bubble-other {
+  background: var(--win95-hilite) !important;
+  color: var(--win95-text) !important;
+  border: 2px solid;
+  border-top-color: var(--win95-shadow);
+  border-left-color: var(--win95-shadow);
+  border-right-color: var(--win95-hilite);
+  border-bottom-color: var(--win95-hilite);
+  box-shadow:
+    inset 1px 1px 0 var(--win95-dark),
+    inset -1px -1px 0 var(--win95-light) !important;
+  border-radius: 0 !important;
+}
+
+/* Roleplay-mode message bubbles. ChatMessage.tsx renders these as
+ * `.mari-message-bubble` *without* a `.texting-bubble` class (that's
+ * the conversation/iMessage path), with an inline
+ * `style={{ backgroundColor: rgba(23,23,23,…) }}` and Tailwind
+ * `text-white/90` / `text-neutral-100`. Defeat both. The wrapper
+ * carries `.mari-message-user` / `.mari-message-assistant` from
+ * ChatMessage.tsx:1068, which we use to differentiate user vs
+ * assistant for the navy/white treatment. */
+.mari-message-bubble:not(.texting-bubble) {
+  background: var(--win95-hilite) !important;
+  color: var(--win95-text) !important;
+  border: 2px solid !important;
+  border-top-color: var(--win95-shadow) !important;
+  border-left-color: var(--win95-shadow) !important;
+  border-right-color: var(--win95-hilite) !important;
+  border-bottom-color: var(--win95-hilite) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--win95-dark),
+    inset -1px -1px 0 var(--win95-light) !important;
+  border-radius: 0 !important;
+}
+
+.mari-message-user .mari-message-bubble:not(.texting-bubble) {
+  background: linear-gradient(
+    to bottom,
+    var(--win95-title-active-1) 0%,
+    var(--win95-title-active-2) 100%
+  ) !important;
+  color: var(--win95-hilite) !important;
+  border-top-color: var(--win95-title-active-2) !important;
+  border-left-color: var(--win95-title-active-2) !important;
+  border-right-color: var(--win95-title-active-1) !important;
+  border-bottom-color: var(--win95-title-active-1) !important;
+  box-shadow: none !important;
+}
+
+/* Roleplay user messages keep the engine's `.mari-message-content`
+ * but Tailwind `text-white/90` colors stick on descendants — force
+ * white for user bubbles. Scoped to the Roleplay surface only;
+ * Conversation user messages now sit in white text-wells (added
+ * above) and need black text inherited from the generic
+ * `.mari-message-content` rule. */
+[data-component="ChatArea.Roleplay"] .mari-message-user .mari-message-content,
+[data-component="ChatArea.Roleplay"] .mari-message-user .mari-message-content * {
+  color: var(--win95-hilite) !important;
+}
+
+/* The engine hardcodes `.mari-message-content { color: #c3c2c2 }` in
+ * globals.css for the dark theme. On our `#c0c0c0` field that's
+ * effectively invisible (3 RGB units apart). Conversation mode uses
+ * a flat Discord-style layout (no bubble) so we target
+ * `.mari-message-content` directly with a descendant `*` to flatten
+ * nested Tailwind utility colors (markdown spans, link tokens, etc.).
+ * The user-bubble override below wins back navy/white for the
+ * Roleplay-mode iMessage path. */
+.mari-message-content,
+.mari-message-content * {
+  color: var(--win95-text) !important;
+}
+
+.mari-message-bubble.texting-bubble-user .mari-message-content,
+.mari-message-bubble.texting-bubble-user .mari-message-content * {
+  color: var(--win95-hilite) !important;
+}
+
+/* ── Form controls ─────────────────────────────────────────────── */
+button:not(.win95-titlebar-btn):not(.win95-skip):not([data-component="Modal"] [aria-label]),
+.button,
+[role="button"]:not(.win95-skip) {
+  font-family: var(--font-y2k);
+  font-size: 11px;
+  color: var(--win95-text);
+  background: var(--win95-face);
+  border: 2px solid;
+  border-top-color: var(--win95-light);
+  border-left-color: var(--win95-light);
+  border-right-color: var(--win95-dark);
+  border-bottom-color: var(--win95-dark);
+  box-shadow:
+    inset 1px 1px 0 var(--win95-hilite),
+    inset -1px -1px 0 var(--win95-shadow);
+  border-radius: 0 !important; /* Defeats Tailwind rounded-* utilities baked into engine markup. */
+  padding: 3px 10px;
+  min-height: 22px;
+  cursor: default;
+}
+
+button:not(.win95-titlebar-btn):not(.win95-skip):active,
+.button:active,
+[role="button"]:not(.win95-skip):active {
+  border-top-color: var(--win95-dark);
+  border-left-color: var(--win95-dark);
+  border-right-color: var(--win95-light);
+  border-bottom-color: var(--win95-light);
+  box-shadow:
+    inset 1px 1px 0 var(--win95-shadow),
+    inset -1px -1px 0 var(--win95-hilite);
+}
+
+button:focus-visible:not(.win95-titlebar-btn),
+[role="button"]:focus-visible {
+  outline: 1px dotted var(--win95-text);
+  outline-offset: -4px;
+}
+
+button:disabled,
+[role="button"][aria-disabled="true"] {
+  color: var(--win95-disabled-text);
+  text-shadow: 1px 1px 0 var(--win95-hilite);
+}
+
+input[type="text"],
+input[type="search"],
+input[type="email"],
+input[type="number"],
+input[type="password"],
+input[type="url"],
+input[type="tel"],
+input:not([type]),
+textarea,
+select {
+  font-family: var(--font-y2k);
+  font-size: 11px;
+  color: var(--win95-text);
+  background: var(--win95-hilite);
+  border: 2px solid;
+  border-top-color: var(--win95-shadow);
+  border-left-color: var(--win95-shadow);
+  border-right-color: var(--win95-hilite);
+  border-bottom-color: var(--win95-hilite);
+  box-shadow:
+    inset 1px 1px 0 var(--win95-dark),
+    inset -1px -1px 0 var(--win95-light);
+  border-radius: 0 !important; /* Same Tailwind defeat as buttons. */
+  padding: 3px 4px;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 13px;
+  height: 13px;
+  background: var(--win95-hilite);
+  border: 2px solid;
+  border-top-color: var(--win95-shadow);
+  border-left-color: var(--win95-shadow);
+  border-right-color: var(--win95-hilite);
+  border-bottom-color: var(--win95-hilite);
+  box-shadow:
+    inset 1px 1px 0 var(--win95-dark),
+    inset -1px -1px 0 var(--win95-light);
+  border-radius: 0;
+  display: inline-block;
+  position: relative;
+  vertical-align: middle;
+  cursor: default;
+}
+
+input[type="radio"] {
+  border-radius: 50%;
+  box-shadow: none;
+}
+
+input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 2px;
+  width: 5px;
+  height: 8px;
+  border: solid var(--win95-text);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+input[type="radio"]:checked::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  background: var(--win95-text);
+}
+
+/* ── Scrollbars (webkit-only — Firefox keeps native) ─────────────── */
+* {
+  scrollbar-width: auto;
+  scrollbar-color: var(--win95-face) var(--win95-shadow);
+}
+
+::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: var(--win95-face);
+  background-image:
+    linear-gradient(45deg, var(--win95-light) 25%, transparent 25%, transparent 75%, var(--win95-light) 75%),
+    linear-gradient(45deg, var(--win95-light) 25%, transparent 25%, transparent 75%, var(--win95-light) 75%);
+  background-size: 2px 2px;
+  background-position: 0 0, 1px 1px;
+  background-color: #c8c8c8;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--win95-face);
+  border: 2px solid;
+  border-top-color: var(--win95-light);
+  border-left-color: var(--win95-light);
+  border-right-color: var(--win95-dark);
+  border-bottom-color: var(--win95-dark);
+  box-shadow:
+    inset 1px 1px 0 var(--win95-hilite),
+    inset -1px -1px 0 var(--win95-shadow);
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--win95-face);
+}
+
+::-webkit-scrollbar-button {
+  background: var(--win95-face);
+  border: 2px solid;
+  border-top-color: var(--win95-light);
+  border-left-color: var(--win95-light);
+  border-right-color: var(--win95-dark);
+  border-bottom-color: var(--win95-dark);
+  box-shadow:
+    inset 1px 1px 0 var(--win95-hilite),
+    inset -1px -1px 0 var(--win95-shadow);
+  display: block;
+  width: 16px;
+  height: 16px;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+::-webkit-scrollbar-button:active {
+  border-top-color: var(--win95-dark);
+  border-left-color: var(--win95-dark);
+  border-right-color: var(--win95-light);
+  border-bottom-color: var(--win95-light);
+  box-shadow:
+    inset 1px 1px 0 var(--win95-shadow),
+    inset -1px -1px 0 var(--win95-hilite);
+}
+
+::-webkit-scrollbar-button:vertical:start {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='7' height='4' viewBox='0 0 7 4'><polygon points='3.5,0 7,4 0,4' fill='%23000'/></svg>");
+}
+::-webkit-scrollbar-button:vertical:end {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='7' height='4' viewBox='0 0 7 4'><polygon points='0,0 7,0 3.5,4' fill='%23000'/></svg>");
+}
+::-webkit-scrollbar-button:horizontal:start {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='4' height='7' viewBox='0 0 4 7'><polygon points='0,3.5 4,0 4,7' fill='%23000'/></svg>");
+}
+::-webkit-scrollbar-button:horizontal:end {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='4' height='7' viewBox='0 0 4 7'><polygon points='0,0 4,3.5 0,7' fill='%23000'/></svg>");
+}
+
+/* The double-arrow buttons at each track end are not standard webkit;
+ * single arrows on each end is the canonical Win95 layout we ship. */
+::-webkit-scrollbar-button:vertical:start:decrement,
+::-webkit-scrollbar-button:vertical:end:increment,
+::-webkit-scrollbar-button:horizontal:start:decrement,
+::-webkit-scrollbar-button:horizontal:end:increment {
+  display: block;
+}
+
+::-webkit-scrollbar-button:vertical:start:increment,
+::-webkit-scrollbar-button:vertical:end:decrement,
+::-webkit-scrollbar-button:horizontal:start:increment,
+::-webkit-scrollbar-button:horizontal:end:decrement {
+  display: none;
+}
+
+/* ── Modals (engine renders `[data-component="Modal"]` as the root) ── */
+[data-component="Modal"] {
+  background: var(--win95-face) !important; /* Modal uses inline styles for backdrop blur — defeat them here only. */
+  color: var(--win95-text);
+  border: 2px solid;
+  border-top-color: var(--win95-light);
+  border-left-color: var(--win95-light);
+  border-right-color: var(--win95-dark);
+  border-bottom-color: var(--win95-dark);
+  box-shadow:
+    inset 1px 1px 0 var(--win95-hilite),
+    inset -1px -1px 0 var(--win95-shadow),
+    2px 2px 0 var(--win95-dark);
+  border-radius: 0 !important;
+  padding-top: 28px;
+  font-family: var(--font-y2k);
+  position: relative;
+}
+
+[data-component="Modal"]::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  right: 2px;
+  height: 22px;
+  background: linear-gradient(
+    to right,
+    var(--win95-title-active-1) 0%,
+    var(--win95-title-active-2) 100%
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ── Lucide icon weight ───────────────────────────────────────
+ * Lucide-react icons render as thin single-weight stroked SVGs
+ * (`stroke-width: 2` baseline). Win95 icons were chunky filled
+ * pixel art. We can't replace the icons without JS DOM-swap, but
+ * bumping the stroke and adding a high-contrast filter pushes them
+ * visibly closer to period weight. The TopBar icon row gets the
+ * heaviest treatment since that's the most-called-out surface. */
+svg[class*="lucide"],
+svg.lucide {
+  stroke-width: 2.75 !important;
+  shape-rendering: crispEdges;
+}
+
+[data-component="TopBar"] svg[class*="lucide"],
+.mari-topbar svg[class*="lucide"],
+.mari-sidebar-header svg[class*="lucide"],
+.mari-right-panel-header svg[class*="lucide"] {
+  stroke-width: 3 !important;
+  filter: contrast(1.4) brightness(0.85);
+}
+
+/* Top bar buttons — group the icon row inside a Win95 toolbar tray
+ * with a 1-px sunken separator at the bottom. Engine renders the
+ * top-bar as `mari-topbar bg-[var(--card)]/80 backdrop-blur-sm` —
+ * with backdrop-blur already killed, we just need a bottom border
+ * to separate the toolbar from the chat area beneath. */
+.mari-topbar,
+[data-component="TopBar"] {
+  background: var(--win95-face) !important;
+  border-bottom: 1px solid var(--win95-shadow) !important;
+}
+
+/* ── Range sliders ─────────────────────────────────────────────
+ * Win95 trackbar: chunky rectangular thumb with sunken track. The
+ * default `<input type="range">` renders modern HTML5 styling which
+ * sticks out as anachronistic. */
+input[type="range"] {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  background: transparent !important;
+  height: 22px;
+  padding: 0;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  background: var(--win95-shadow);
+  border: 1px solid;
+  border-top-color: var(--win95-dark);
+  border-left-color: var(--win95-dark);
+  border-right-color: var(--win95-hilite);
+  border-bottom-color: var(--win95-hilite);
+}
+
+input[type="range"]::-moz-range-track {
+  height: 4px;
+  background: var(--win95-shadow);
+  border: 1px solid;
+  border-top-color: var(--win95-dark);
+  border-left-color: var(--win95-dark);
+  border-right-color: var(--win95-hilite);
+  border-bottom-color: var(--win95-hilite);
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 22px;
+  background: var(--win95-face);
+  border: 2px solid;
+  border-top-color: var(--win95-light);
+  border-left-color: var(--win95-light);
+  border-right-color: var(--win95-dark);
+  border-bottom-color: var(--win95-dark);
+  box-shadow:
+    inset 1px 1px 0 var(--win95-hilite),
+    inset -1px -1px 0 var(--win95-shadow);
+  border-radius: 0;
+  cursor: default;
+  margin-top: -10px;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 22px;
+  background: var(--win95-face);
+  border: 2px solid;
+  border-top-color: var(--win95-light);
+  border-left-color: var(--win95-light);
+  border-right-color: var(--win95-dark);
+  border-bottom-color: var(--win95-dark);
+  box-shadow:
+    inset 1px 1px 0 var(--win95-hilite),
+    inset -1px -1px 0 var(--win95-shadow);
+  border-radius: 0;
+  cursor: default;
+}
+
+/* ── Color picker ─────────────────────────────────────────────
+ * Native `<input type="color">` shows a modern browser swatch — wrap
+ * it in a Win95 sunken bevel so the swatch reads as a Win95 control.
+ * Clicking still opens the browser's native picker dialog (which we
+ * can't override without JS), but at least the trigger looks period. */
+input[type="color"] {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  width: 36px !important;
+  height: 22px !important;
+  background: transparent !important;
+  border: 2px solid !important;
+  border-top-color: var(--win95-shadow) !important;
+  border-left-color: var(--win95-shadow) !important;
+  border-right-color: var(--win95-hilite) !important;
+  border-bottom-color: var(--win95-hilite) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--win95-dark),
+    inset -1px -1px 0 var(--win95-light) !important;
+  border-radius: 0 !important;
+  padding: 1px !important;
+  cursor: default;
+}
+
+input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+input[type="color"]::-webkit-color-swatch {
+  border: 1px solid var(--win95-text);
+  border-radius: 0;
+}
+
+input[type="color"]::-moz-color-swatch {
+  border: 1px solid var(--win95-text);
+  border-radius: 0;
+}
+
+/* ── Presence dots / status LEDs ──────────────────────────────
+ * Engine paints `bg-green-500` / `bg-yellow-500` / `bg-red-500`
+ * `rounded-full` dots with subtle glow shadows for online/idle/dnd
+ * presence. Win95 had no presence concept and certainly no glowing
+ * anti-aliased circles. Keep the color (it's a meaningful signal)
+ * but flatten to a hard 6×6 square LED with no glow + a 1-px black
+ * outline for that authentic 32-bit-icon LED look. */
+[class*="bg-green-500"][class*="rounded-full"],
+[class*="bg-yellow-500"][class*="rounded-full"],
+[class*="bg-red-500"][class*="rounded-full"],
+[class*="bg-gray-400"][class*="rounded-full"] {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  filter: none !important;
+  outline: 1px solid var(--win95-text);
+}
+
+/* ── Home page (`[data-component="ChatArea.EmptyState"]`) ──────
+ * Marinara branding lives here: the gradient pasta-bowl logo with
+ * its `rounded-2xl shadow-xl shadow-orange-500/20 animate-pulse-ring
+ * bunny-glow` container, the "✧ Marinara Engine ✧" wordmark with
+ * `retro-glow-text`, and three QuickStartCard mode tiles with inline
+ * gradient swatch backgrounds. Period-incorrect across the board.
+ * Square the logo container, kill the glow + animation, flatten the
+ * wordmark, and pin mode-tile icon swatches to Win95 face. */
+[data-component="ChatArea.EmptyState"] [class*="rounded-2xl"][class*="shadow"] {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  animation: none !important;
+}
+
+[data-component="ChatArea.EmptyState"] [class*="rounded-2xl"][class*="shadow"] img {
+  filter: grayscale(0.7) contrast(0.85);
+}
+
+[data-component="ChatArea.EmptyState"] .retro-glow-text {
+  text-shadow: none !important;
+  color: var(--win95-text) !important;
+  background: none !important;
+  background-image: none !important;
+  -webkit-text-fill-color: var(--win95-text) !important;
+  background-clip: border-box !important;
+  -webkit-background-clip: border-box !important;
+}
+
+/* QuickStartCard (the three mode tiles — Conversation / Roleplay /
+ * Game). The card itself uses `rounded-xl border-2 bg-[var(--card)]
+ * card-3d-tilt btn-scanlines` and a hover lift; the icon swatch
+ * inside has an inline gradient bg passed as a prop. Reframe the card
+ * as a plain Win95 raised button and flatten the gradient swatch. */
+[data-component="ChatArea.EmptyState"] .card-3d-tilt {
+  border-radius: 0 !important;
+  border: 2px solid !important;
+  border-top-color: var(--win95-light) !important;
+  border-left-color: var(--win95-light) !important;
+  border-right-color: var(--win95-dark) !important;
+  border-bottom-color: var(--win95-dark) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--win95-hilite),
+    inset -1px -1px 0 var(--win95-shadow) !important;
+  background: var(--win95-face) !important;
+  transform: none !important;
+}
+
+[data-component="ChatArea.EmptyState"] .card-3d-tilt:active,
+[data-component="ChatArea.EmptyState"] .card-3d-tilt:hover {
+  transform: none !important;
+  border-top-color: var(--win95-light) !important;
+  border-left-color: var(--win95-light) !important;
+  border-right-color: var(--win95-dark) !important;
+  border-bottom-color: var(--win95-dark) !important;
+}
+
+[data-component="ChatArea.EmptyState"] .card-3d-tilt > div[style*="background"],
+[data-component="ChatArea.EmptyState"] .card-3d-tilt > div[style*="linear-gradient"] {
+  background: var(--win95-face) !important;
+  background-image: none !important;
+  border: 1px solid var(--win95-shadow) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+[data-component="ChatArea.EmptyState"] .btn-scanlines::after,
+[data-component="ChatArea.EmptyState"] .btn-scanlines::before {
+  display: none !important;
+}
+
+/* HomeFaq card and its inner badges/avatars. The card root has a
+ * rounded pill style with shadow + a circular Professor Mari avatar
+ * + a small "N answers" rounded-full badge. Flatten everything. */
+[data-component="ChatArea.EmptyState"] [class*="rounded-2xl"],
+[data-component="ChatArea.EmptyState"] [class*="rounded-3xl"],
+[data-component="ChatArea.EmptyState"] [class*="rounded-xl"],
+[data-component="ChatArea.EmptyState"] [class*="rounded-lg"],
+[data-component="ChatArea.EmptyState"] [class*="rounded-full"] {
+  border-radius: 0 !important;
+}
+
+[data-component="ChatArea.EmptyState"] [class*="shadow-lg"],
+[data-component="ChatArea.EmptyState"] [class*="shadow-xl"],
+[data-component="ChatArea.EmptyState"] [class*="shadow-md"],
+[data-component="ChatArea.EmptyState"] [class*="shadow-sm"],
+[data-component="ChatArea.EmptyState"] [class*="shadow-2xl"] {
+  box-shadow: none !important;
+}
+
+/* Discord / Support footer buttons on the home page. Engine renders
+ * these as `<a>` with `rounded-full` + Discord/heart glyphs. Pin
+ * Win95 raised button bevel. */
+[data-component="ChatArea.EmptyState"] a[href*="discord.com"],
+[data-component="ChatArea.EmptyState"] a[href*="github.com"],
+[data-component="ChatArea.EmptyState"] a[href*="ko-fi"] {
+  background: var(--win95-face) !important;
+  color: var(--win95-text) !important;
+  border: 2px solid !important;
+  border-top-color: var(--win95-light) !important;
+  border-left-color: var(--win95-light) !important;
+  border-right-color: var(--win95-dark) !important;
+  border-bottom-color: var(--win95-dark) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--win95-hilite),
+    inset -1px -1px 0 var(--win95-shadow) !important;
+  border-radius: 0 !important;
+  padding: 3px 10px !important;
+  text-decoration: none !important;
+}
+
+/* Marinara wordmark sparkles `✧ Marinara Engine ✧` + similar
+ * decorative glyphs (✨, ⋆, ✦) anywhere they decorate Marinara
+ * branding. Keep the text but trim the obvious modern-chrome
+ * sparkle animation if present. */
+.retro-glow-text {
+  text-shadow: none !important;
+  background: none !important;
+  background-image: none !important;
+  -webkit-text-fill-color: var(--win95-text) !important;
+  background-clip: border-box !important;
+  -webkit-background-clip: border-box !important;
+  color: var(--win95-text) !important;
+  animation: none !important;
+}
+
+/* ── Settings panel (own UI — Ctrl+Shift+9 / #win95) ─────────────── */
+.win95-settings {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 99999;
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  background: var(--win95-face);
+  color: var(--win95-text);
+  font-family: var(--font-y2k);
+  font-size: 11px;
+  border: 2px solid;
+  border-top-color: var(--win95-light);
+  border-left-color: var(--win95-light);
+  border-right-color: var(--win95-dark);
+  border-bottom-color: var(--win95-dark);
+  box-shadow:
+    inset 1px 1px 0 var(--win95-hilite),
+    inset -1px -1px 0 var(--win95-shadow),
+    2px 2px 0 var(--win95-dark);
+  padding: 4px;
+}
+
+.win95-settings.is-hidden { display: none; }
+
+.win95-settings-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 2px 3px 2px 4px;
+  background: linear-gradient(
+    to right,
+    var(--win95-title-active-1) 0%,
+    var(--win95-title-active-2) 100%
+  );
+  color: var(--win95-hilite);
+  font-weight: 700;
+  user-select: none;
+}
+
+.win95-settings-titlebar-title { flex: 1; }
+
+.win95-settings-body {
+  padding: 12px 10px 10px;
+}
+
+.win95-settings-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.win95-settings-row label { cursor: default; }
+
+.win95-settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.win95-settings-help {
+  margin: 12px 0 0;
+  padding: 6px 8px;
+  font-size: 11px;
+  line-height: 1.4;
+  border: 2px solid;
+  border-top-color: var(--win95-shadow);
+  border-left-color: var(--win95-shadow);
+  border-right-color: var(--win95-hilite);
+  border-bottom-color: var(--win95-hilite);
+  background: var(--win95-hilite);
+  color: var(--win95-text);
+}
