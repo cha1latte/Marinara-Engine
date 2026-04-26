@@ -6120,6 +6120,11 @@ export async function generateRoutes(app: FastifyInstance) {
       // Character Command Execution (Conversation mode)
       // ────────────────────────────────────────
       if (collectedCommands.length > 0 && !abortController.signal.aborted) {
+        trySendSseEvent(reply, {
+          type: "assistant_commands_start",
+          data: { count: collectedCommands.length },
+        });
+        try {
         for (const { command, characterId, messageId } of collectedCommands) {
           try {
             if (command.type === "schedule_update") {
@@ -6937,6 +6942,12 @@ export async function generateRoutes(app: FastifyInstance) {
           } catch (cmdErr) {
             logger.error(cmdErr, `[commands] Error processing ${command.type} command`);
           }
+        }
+        } finally {
+          trySendSseEvent(reply, {
+            type: "assistant_commands_end",
+            data: {},
+          });
         }
       }
 
