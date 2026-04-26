@@ -1232,39 +1232,100 @@ input[type="radio"]:checked::after {
   display: none;
 }
 
-/* ── Modals (engine renders `[data-component="Modal"]` as the root) ── */
+/* ── Modals ─────────────────────────────────────────────────────
+ * Engine structure (Modal.tsx):
+ *   [data-component="Modal"]         — full-viewport `fixed inset-0`
+ *                                       overlay (do NOT style here —
+ *                                       its `::before` would cover
+ *                                       the whole screen with a fake
+ *                                       titlebar).
+ *   .mari-modal-backdrop             — black/60 backdrop dimmer.
+ *   .mari-modal-panel.os-window      — the actual dialog frame
+ *                                       (this is what we Win95-ize).
+ * `.os-window` is also defined in globals.css with a Y2K dark/purple
+ * look — overriding it here Win95-izes every os-window in the app
+ * (consistent with this being the Win95 theme). */
 [data-component="Modal"] {
-  background: var(--win95-face) !important; /* Modal uses inline styles for backdrop blur — defeat them here only. */
-  color: var(--win95-text);
-  border: 2px solid;
-  border-top-color: var(--win95-light);
-  border-left-color: var(--win95-light);
-  border-right-color: var(--win95-dark);
-  border-bottom-color: var(--win95-dark);
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  font-family: var(--font-y2k);
+}
+
+.mari-modal-backdrop {
+  background: rgba(0, 0, 0, 0.5) !important;
+  backdrop-filter: none !important;
+}
+
+.mari-modal-panel,
+.os-window {
+  background: var(--win95-face) !important;
+  color: var(--win95-text) !important;
+  border: 2px solid !important;
+  border-top-color: var(--win95-light) !important;
+  border-left-color: var(--win95-light) !important;
+  border-right-color: var(--win95-dark) !important;
+  border-bottom-color: var(--win95-dark) !important;
   box-shadow:
     inset 1px 1px 0 var(--win95-hilite),
     inset -1px -1px 0 var(--win95-shadow),
-    2px 2px 0 var(--win95-dark);
+    2px 2px 0 var(--win95-dark) !important;
   border-radius: 0 !important;
-  padding-top: 28px;
-  font-family: var(--font-y2k);
-  position: relative;
+  padding-top: 28px !important;
+  position: relative !important;
+  backdrop-filter: none !important;
 }
 
-[data-component="Modal"]::before {
-  content: "";
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  right: 2px;
-  height: 22px;
+.mari-modal-panel::before,
+.os-window::before {
+  content: "" !important;
+  position: absolute !important;
+  top: 2px !important;
+  left: 2px !important;
+  right: 2px !important;
+  height: 22px !important;
   background: linear-gradient(
     to right,
     var(--win95-title-active-1) 0%,
     var(--win95-title-active-2) 100%
-  );
-  pointer-events: none;
-  z-index: 1;
+  ) !important;
+  pointer-events: none !important;
+  z-index: 1 !important;
+  border-radius: 0 !important;
+}
+
+/* Modal panel content — paint it black on Win95 face. The engine's
+ * dialogs use `text-foreground/X` color tokens which under our
+ * overrides resolve correctly, but inputs and form controls inside
+ * dialogs sometimes carry their own dark-themed Tailwind utilities
+ * that need flattening. */
+.mari-modal-panel,
+.mari-modal-panel *,
+.os-window,
+.os-window * {
+  color: var(--win95-text) !important;
+  text-shadow: none !important;
+}
+
+/* Form inputs inside dialogs need the standard Win95 sunken text-
+ * control look. Engine often paints them with `bg-[var(--secondary)]
+ * ring-1 ring-transparent focus:ring-...` which our token override
+ * covers for bg, but the rounded ring needs explicit defeat. */
+.mari-modal-panel input[type="text"],
+.mari-modal-panel input[type="search"],
+.mari-modal-panel input:not([type]),
+.mari-modal-panel textarea,
+.mari-modal-panel select,
+.os-window input[type="text"],
+.os-window input[type="search"],
+.os-window input:not([type]),
+.os-window textarea,
+.os-window select {
+  background: var(--win95-hilite) !important;
+  color: var(--win95-text) !important;
+  border-radius: 0 !important;
+  --tw-ring-color: transparent !important;
 }
 
 /* ── Lucide icon weight ───────────────────────────────────────
