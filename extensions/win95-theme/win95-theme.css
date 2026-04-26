@@ -2,6 +2,23 @@
  * All custom selectors are prefixed `win95-`. Engine semantic CSS vars
  * are overridden at :root so we don't fight component-level selectors. */
 
+/* ── Pixel font (W95FA) ──────────────────────────────────────────────
+ * The CSS injected by the extension lives in a `<style>` tag, so
+ * relative `url(...)` would resolve against the page origin and 404.
+ * The font is therefore inlined as a base64 data URI by `build.js`,
+ * which substitutes the `__W95FA_PLACEHOLDER__` token below at bundle
+ * time. If `w95fa.woff2` is missing from the repo root the placeholder
+ * stays as-is, the URL silently 404s, and the fallback chain
+ * (Pixelated MS Sans Serif → MS Sans Serif → Tahoma) takes over.
+ * Source: https://www.dafont.com/w95fa.font (open license, ~30 KB). */
+@font-face {
+  font-family: "W95FA";
+  src: url("__W95FA_PLACEHOLDER__") format("woff2");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* ── Palette + tokens (overrides engine vars in both light & dark) ── */
 :root,
 [data-theme="dark"],
@@ -51,8 +68,8 @@
   --radius: 0;
 
   --font-y2k:
-    "MS Sans Serif", "Pixelated MS Sans Serif", "Microsoft Sans Serif",
-    Tahoma, Geneva, sans-serif;
+    "W95FA", "Pixelated MS Sans Serif", "MS Sans Serif",
+    "Microsoft Sans Serif", Tahoma, Geneva, sans-serif;
 
   --app-font-size: 0.75rem;
 
@@ -1308,6 +1325,91 @@ input[type="radio"]:checked::after {
   text-shadow: none !important;
 }
 
+/* Modal native header → Win95 titlebar. The engine's Modal renders
+ * its own header (`<h2>{title}</h2>` + close `<X>` button) below
+ * our decorative ::before strip — that produced a stacked
+ * empty-blue-strip + grey-header look that wasn't authentic. Hide
+ * the decorative strip on real modals only (.mari-modal-panel),
+ * drop the padding-top hack, and restyle the native header div as
+ * the actual Win95 title bar with white-on-blue title and an
+ * inset close button. .os-window (used elsewhere) keeps its
+ * decorative strip since those surfaces don't have native headers. */
+.mari-modal-panel {
+  padding-top: 0 !important;
+}
+
+.mari-modal-panel::before {
+  display: none !important;
+}
+
+.mari-modal-panel > .shrink-0.flex.items-center.justify-between {
+  background: linear-gradient(
+    to right,
+    var(--win95-title-active-1) 0%,
+    var(--win95-title-active-2) 100%
+  ) !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--win95-shadow) !important;
+  padding: 2px 2px 2px 6px !important;
+  min-height: 22px !important;
+  font-family: var(--font-y2k) !important;
+}
+
+.mari-modal-panel > .shrink-0.flex.items-center.justify-between > h2 {
+  color: var(--win95-hilite) !important;
+  font-size: 0.6875rem !important;
+  font-weight: bold !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 18px !important;
+  font-family: var(--font-y2k) !important;
+  letter-spacing: 0 !important;
+}
+
+/* Close button inside the native header — restyle as Win95 close
+ * button (small raised square with bold ×). The button keeps its
+ * onClick (Modal's onClose), so functionality is preserved. */
+.mari-modal-panel > .shrink-0.flex.items-center.justify-between > button {
+  background: var(--win95-face) !important;
+  border: 1px solid !important;
+  border-top-color: var(--win95-light) !important;
+  border-left-color: var(--win95-light) !important;
+  border-right-color: var(--win95-dark) !important;
+  border-bottom-color: var(--win95-dark) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--win95-hilite),
+    inset -1px -1px 0 var(--win95-shadow) !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  width: 18px !important;
+  height: 16px !important;
+  min-width: 18px !important;
+  color: var(--win95-text) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.mari-modal-panel > .shrink-0.flex.items-center.justify-between > button:hover {
+  background: var(--win95-face) !important;
+  color: var(--win95-text) !important;
+}
+
+.mari-modal-panel > .shrink-0.flex.items-center.justify-between > button:active {
+  border-top-color: var(--win95-dark) !important;
+  border-left-color: var(--win95-dark) !important;
+  border-right-color: var(--win95-light) !important;
+  border-bottom-color: var(--win95-light) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--win95-shadow),
+    inset -1px -1px 0 var(--win95-hilite) !important;
+}
+
+.mari-modal-panel > .shrink-0.flex.items-center.justify-between > button svg {
+  width: 10px !important;
+  height: 10px !important;
+}
+
 /* Form inputs inside dialogs need the standard Win95 sunken text-
  * control look. Engine often paints them with `bg-[var(--secondary)]
  * ring-1 ring-transparent focus:ring-...` which our token override
@@ -1358,6 +1460,583 @@ svg.lucide {
 [data-component="TopBar"] {
   background: var(--win95-face) !important;
   border-bottom: 1px solid var(--win95-shadow) !important;
+}
+
+/* ── Y2K decorative stars + glow effects ──────────────────
+ * AppShell paints animated star glyphs at percentage positions
+ * across the desktop background (`.y2k-star`, `.y2k-star-md`,
+ * `.y2k-star-lg`) — pure modern decorative atmosphere. Win95 had
+ * solid flat fills, no atmospheric effects. Hide them all. */
+.y2k-star,
+.y2k-star-md,
+.y2k-star-lg {
+  display: none !important;
+}
+
+/* Inline help-circle icons. The engine sprinkles `<HelpTooltip>`
+ * everywhere (next to every Setting field label, every accordion
+ * row). Win95 used the title-bar `?` for context help — never
+ * inline next to every field. Hide them globally except inside
+ * our own win95-titlebar (the close `?` etc.). */
+svg.lucide-help-circle,
+svg.lucide-circle-help,
+svg[class*="lucide-help"] {
+  display: none !important;
+}
+
+/* iOS/2010s-style pill toggles. The Connections panel TTS toggle
+ * (and a few others) use a `role="switch"` button with a sliding
+ * white circle. Reframe as a Win95 chunky button with the state
+ * implied by a "X" or filled square. */
+[role="switch"] {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 32px !important;
+  height: 22px !important;
+  padding: 0 !important;
+  background: var(--win95-face) !important;
+  border: 2px solid !important;
+  border-top-color: var(--win95-light) !important;
+  border-left-color: var(--win95-light) !important;
+  border-right-color: var(--win95-dark) !important;
+  border-bottom-color: var(--win95-dark) !important;
+  border-radius: 0 !important;
+  box-shadow:
+    inset 1px 1px 0 var(--win95-hilite),
+    inset -1px -1px 0 var(--win95-shadow) !important;
+}
+
+[role="switch"][aria-checked="true"] {
+  border-top-color: var(--win95-dark) !important;
+  border-left-color: var(--win95-dark) !important;
+  border-right-color: var(--win95-light) !important;
+  border-bottom-color: var(--win95-light) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--win95-shadow),
+    inset -1px -1px 0 var(--win95-hilite) !important;
+}
+
+[role="switch"]::after {
+  content: "";
+  display: block;
+  width: 8px;
+  height: 8px;
+}
+
+[role="switch"][aria-checked="true"]::after {
+  background: var(--win95-text);
+}
+
+/* Hide the engine's sliding circle inside the switch */
+[role="switch"] > * {
+  display: none !important;
+}
+
+/* Top toolbar colored underline indicator. The TopBar buttons
+ * each get a thin colored bottom-border line when their panel is
+ * open. Win95 toggles used the pressed-bevel state instead — kill
+ * the line, the button bevel already conveys state. */
+.mari-topbar button > [class*="bg-"][class*="absolute"][class*="bottom-0"],
+[data-component="TopBar"] button [class*="absolute"][class*="bottom-0"] {
+  display: none !important;
+}
+
+/* "Danger Zone" callout in Advanced settings — engine paints as
+ * `bg-red-500/X border-red-400/X` light-tinted panel with warning
+ * triangle. Win95 used standard message-box dialogs; in-panel
+ * tinted callouts are a GitHub/modern convention. Reframe as a
+ * sunken Win95 group with a "WARNING" heading bar. */
+[data-component="RightPanel"] [class*="bg-red-"][class*="border-red-"],
+[data-component="RightPanel"] [class*="bg-rose-"][class*="border-rose-"] {
+  background: var(--win95-face) !important;
+  background-image: none !important;
+  border: 2px solid !important;
+  border-top-color: var(--win95-shadow) !important;
+  border-left-color: var(--win95-shadow) !important;
+  border-right-color: var(--win95-hilite) !important;
+  border-bottom-color: var(--win95-hilite) !important;
+  border-radius: 0 !important;
+  color: var(--win95-text) !important;
+}
+
+/* Kill all transitions inside chat surfaces and panels. Win95 had
+ * no hover/focus animations — every state change was instant. We
+ * keep transitions on form inputs (focus rings) and modals (open/
+ * close fade) since those provide useful feedback. */
+[data-component="ChatSidebar"] *:not(input):not(textarea):not(.mari-modal-panel *),
+[data-component^="ChatArea"] *:not(input):not(textarea):not(.mari-modal-panel *):not(.mari-message-typing *),
+[data-component="RightPanel"] *:not(input):not(textarea):not(.mari-modal-panel *) {
+  transition-property: none !important;
+  transition-duration: 0s !important;
+}
+
+/* Modal backdrop dimming. Engine paints a `bg-black/60` scrim
+ * behind every modal — Win95 never dimmed the background. Make
+ * the scrim transparent so the rest of the UI stays at full
+ * brightness when a modal opens. */
+.mari-modal-backdrop,
+.mari-modal *[class*="bg-black/"] {
+  background: transparent !important;
+}
+
+/* ── Home-page text contrast ────────────────────────────────
+ * Engine renders the home-page intro copy, mode-tile labels, FAQ
+ * subtext, footer credits, etc. with `text-[var(--muted-foreground)]/N`
+ * (Tailwind opacity-modifier syntax — compiles to a `color-mix` at
+ * N% with transparent). Under our `--muted-foreground` = #808080,
+ * mixed against `#c0c0c0` at 50–70%, the result is barely visible.
+ *
+ * Force solid Win95 text (black) for all foreground/muted text in
+ * the EmptyState and the FAQ. The hierarchy gets flatter but stays
+ * Win95-period: real Win95 dialogs used near-black for body text,
+ * with visual hierarchy carried by font size and bold rather than
+ * by color alpha. */
+[data-component="ChatArea.EmptyState"] [class*="text-[var(--muted-foreground)"],
+[data-component="ChatArea.EmptyState"] [class*="text-[var(--foreground)"],
+[data-component="ChatArea.EmptyState"] [class*="text-foreground"],
+[data-component="ChatArea.EmptyState"] [class*="text-white"]:not(.mari-message-bubble *) {
+  color: var(--win95-text) !important;
+  opacity: 1 !important;
+}
+
+/* Mode-tile icons (Conversation / Roleplay / Game) — these are
+ * Lucide SVGs that inherit color from the parent. With the parent
+ * pinned to win95-text, they should render solid black. Defensive
+ * rule for any direct icon coloring. */
+[data-component="ChatArea.EmptyState"] .card-3d-tilt svg,
+[data-component="ChatArea.EmptyState"] button svg {
+  color: var(--win95-text) !important;
+  stroke: var(--win95-text) !important;
+}
+
+/* ── Decorative sparkles (✦ ✧ ✨) ──────────────────────────
+ * The engine sprinkles diamond/sparkle glyphs around branding
+ * (`✧ Marinara Engine ✧`, `✦ PROFESSOR MARI`, `✧ Chats`, etc.).
+ * Pure 2020s "AI-vibes" decoration; period-incorrect for Win95.
+ * Hide them via an `::before` rule that sets the line-height to
+ * collapse the character entirely. Easier path: replace via JS,
+ * but pure-CSS works for ASCII-encoded glyphs. */
+.retro-glow-text,
+[data-component="ChatArea.EmptyState"] h1,
+[data-component="ChatArea.EmptyState"] h2,
+[data-component="ChatArea.EmptyState"] h3 {
+  font-variant-ligatures: none;
+}
+
+/* Settings / Right panel title bar — engine renders the right panel
+ * with a flat header row (gear icon + "Settings" text + close X).
+ * No blue Win95 titlebar. Add one via the panel's existing
+ * `.mari-right-panel-header` class. */
+.mari-right-panel-header,
+[data-component="RightPanel"] > div:first-child {
+  background: linear-gradient(
+    to right,
+    var(--win95-title-active-1) 0%,
+    var(--win95-title-active-2) 100%
+  ) !important;
+  color: var(--win95-hilite) !important;
+  height: 22px !important;
+  min-height: 22px !important;
+  padding: 2px 4px !important;
+  font-family: var(--font-y2k);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.mari-right-panel-header *,
+[data-component="RightPanel"] > div:first-child * {
+  color: var(--win95-hilite) !important;
+}
+
+/* Footer hyperlinks on the home page (engine renders as
+ * underlined `<a>` with a subtle hover color shift). Repaint as
+ * classic Win95 navy underlined links. */
+[data-component="ChatArea.EmptyState"] a {
+  color: var(--win95-title-active-1) !important;
+  text-decoration: underline !important;
+  text-decoration-color: var(--win95-title-active-1) !important;
+}
+
+[data-component="ChatArea.EmptyState"] a:visited {
+  color: #800080 !important; /* Win95 visited-link purple */
+}
+
+[data-component="ChatArea.EmptyState"] a:hover {
+  color: var(--win95-title-active-2) !important;
+  background: transparent !important;
+}
+
+/* Notched Win95-style settings tabs. Engine renders the tab row
+ * with `.border-b border-[var(--sidebar-border)]`. We already paint
+ * each tab as a Win95 button; this rule connects the active tab to
+ * the panel below by hiding its bottom border (same trick real
+ * Win95 tab dialogs use to show "this tab is in front"). */
+[data-component="RightPanel"] .border-b > button:has(> span[class*="bg-[var(--primary)]"]) {
+  border-bottom-color: var(--win95-face) !important;
+  margin-bottom: -2px;
+  z-index: 1;
+}
+
+/* Sort dropdown arrow. Engine renders the sort `<select>` with a
+ * Lucide `ArrowUpDown` icon overlay (`↕`). Win95 comboboxes use a
+ * downward-triangle button on the right. CSS `appearance: none`
+ * already strips the native arrow; my generic `select` rule paints
+ * the sunken bevel. The `<ArrowUpDown>` icon is a separate sibling
+ * we can replace via `::after` content on the wrapper. */
+[data-component="ChatSidebar"] select + svg[class*="lucide"] {
+  display: none !important;
+}
+
+[data-component="ChatSidebar"] .relative:has(> select)::after {
+  content: "▼";
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 9px;
+  color: var(--win95-text);
+  pointer-events: none;
+  background: var(--win95-face);
+  border: 1px solid;
+  border-top-color: var(--win95-light);
+  border-left-color: var(--win95-light);
+  border-right-color: var(--win95-dark);
+  border-bottom-color: var(--win95-dark);
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* "Active" status footer green dot — already squared via the
+ * presence-LED rule above, but also kill any animation/glow that
+ * might still pulse on it. */
+[data-component="ChatSidebar"] [class*="bg-green-500"] {
+  background: #00aa00 !important; /* True Win95 LED green, no glow */
+  animation: none !important;
+}
+
+/* Title-bar button glyphs (`_`, `□`, `×`). My current Win95 chrome
+ * paints them in the Marlett font when available, falling back to
+ * Unicode. Force a chunkier system font and hard pixel rendering. */
+.win95-titlebar-btn {
+  font-family: "Marlett", "Microsoft Sans Serif", "MS Sans Serif", monospace !important;
+  font-weight: 700 !important;
+  font-size: 10px !important;
+  text-rendering: geometricPrecision !important;
+  -webkit-font-smoothing: none !important;
+}
+
+/* Catch-all: any `<button>` or `<a>` rendered as a button that's
+ * still rounded somewhere we missed. Pure-Win95 components have
+ * zero border-radius. */
+[data-component^="ChatArea"] button,
+[data-component^="ChatArea"] [role="button"],
+[data-component="ChatSidebar"] button,
+[data-component="ChatSidebar"] [role="button"],
+[data-component="RightPanel"] button,
+[data-component="RightPanel"] [role="button"] {
+  border-radius: 0 !important;
+}
+
+/* ── Glass / frosted panels ─────────────────────────────────
+ * `.glass` and `.glass-strong` are y2k effect classes used on the
+ * top toolbar, sidebar header, right panel header, and the home
+ * page FAQ card. They paint a peach/pink/blue gradient + blur.
+ * Defeat completely: flat Win95 face, no gradient, no blur. */
+.glass,
+.glass-strong {
+  background: var(--win95-face) !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-radius: 0 !important;
+}
+
+/* ── Tailwind arbitrary-value gradients ─────────────────────
+ * The HomeFaq card and its sub-panels use Tailwind's
+ * `bg-[linear-gradient(...)]` / `bg-[radial-gradient(...)]`
+ * arbitrary-value syntax — my earlier `[class*="bg-gradient-to"]`
+ * rule didn't catch these because the class name format is different.
+ * Catch all gradient-ish arbitrary backgrounds across the home page,
+ * chat surfaces, and right panel. */
+[data-component^="ChatArea"] [class*="bg-[linear-gradient"],
+[data-component^="ChatArea"] [class*="bg-[radial-gradient"],
+[data-component="RightPanel"] [class*="bg-[linear-gradient"],
+[data-component="RightPanel"] [class*="bg-[radial-gradient"],
+[data-component="ChatSidebar"] [class*="bg-[linear-gradient"],
+[data-component="ChatSidebar"] [class*="bg-[radial-gradient"] {
+  background: var(--win95-face) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+/* Inline-style gradients (RecentChats mode dots set
+ * `style={{ background: linear-gradient(...) }}`, character/preset
+ * card icons same pattern). Catch via attribute substring match
+ * on the `style` attribute. Scoped to chat-area surfaces + panels
+ * so we don't disturb anything outside our theme reach. The
+ * ChatSidebar entry covers the GameSetupWizard mode-icon backdrop
+ * (a pink linear-gradient set inline on the icon container of the
+ * "New Game" / "Visual Novel" / "Game" rows). */
+[data-component^="ChatArea"] [style*="linear-gradient"],
+[data-component^="ChatArea"] [style*="radial-gradient"],
+[data-component="RightPanel"] [style*="linear-gradient"],
+[data-component="RightPanel"] [style*="radial-gradient"],
+[data-component="ChatSidebar"] [style*="linear-gradient"],
+[data-component="ChatSidebar"] [style*="radial-gradient"] {
+  background: var(--win95-face) !important;
+  background-image: none !important;
+}
+
+/* ── Flatten Tailwind accent-color utilities on chrome ────────
+ * Various surfaces still leak through accent-colored icons and
+ * badges via Tailwind `text-{color}-{shade}` and `bg-{color}-{shade}`
+ * utilities — Personas empty-state (green User), Connections
+ * selected badge (blue circle + white check), Agents category
+ * icons (orange Regex, teal Writer), Browser stat icons (red
+ * Download/Comment counts), etc. Win95 chrome was essentially
+ * monochrome — the only accent colors were #000080 selection
+ * blue and #aa0000 destructive red. Flatten everything else
+ * inside our chrome scope to var(--win95-text)/var(--win95-face).
+ * Semantic Tailwind tokens (`text-foreground`, `text-muted`,
+ * `bg-card`, etc) don't match these substring patterns because
+ * they have no `-{shade}` digit suffix, so this rule leaves them
+ * alone — they're already remapped via the :root CSS vars. */
+:where(
+  [data-component="ChatSidebar"],
+  [data-component="RightPanel"],
+  [data-component^="ChatArea"],
+  [data-component="TopBar"],
+  .mari-modal-panel,
+  .os-window
+) :is(
+  [class*="text-amber-"],
+  [class*="text-orange-"],
+  [class*="text-red-"],
+  [class*="text-rose-"],
+  [class*="text-pink-"],
+  [class*="text-purple-"],
+  [class*="text-fuchsia-"],
+  [class*="text-violet-"],
+  [class*="text-indigo-"],
+  [class*="text-blue-"],
+  [class*="text-sky-"],
+  [class*="text-cyan-"],
+  [class*="text-teal-"],
+  [class*="text-emerald-"],
+  [class*="text-green-"],
+  [class*="text-lime-"],
+  [class*="text-yellow-"]
+) {
+  color: var(--win95-text) !important;
+}
+
+/* For background-color utilities the substring match needs to
+ * exclude Tailwind variants — `hover:bg-pink-500` shares the
+ * `bg-pink-` substring with the base utility, but only sets the
+ * bg on :hover. Forcing it always-on permanently activates the
+ * hover bg, which made the New button glow navy and would do
+ * the same to every other accent-hover element. The two-pronged
+ * `[class^="bg-..."]` (className starts with) plus
+ * `[class*=" bg-..."]` (preceded by a space, never `:`) catches
+ * the base utility wherever it sits in the className list while
+ * leaving variant-prefixed classes alone. */
+:where(
+  [data-component="ChatSidebar"],
+  [data-component="RightPanel"],
+  [data-component^="ChatArea"],
+  [data-component="TopBar"],
+  .mari-modal-panel,
+  .os-window
+) :is(
+  [class^="bg-amber-"],   [class*=" bg-amber-"],
+  [class^="bg-orange-"],  [class*=" bg-orange-"],
+  [class^="bg-red-"],     [class*=" bg-red-"],
+  [class^="bg-rose-"],    [class*=" bg-rose-"],
+  [class^="bg-pink-"],    [class*=" bg-pink-"],
+  [class^="bg-purple-"],  [class*=" bg-purple-"],
+  [class^="bg-fuchsia-"], [class*=" bg-fuchsia-"],
+  [class^="bg-violet-"],  [class*=" bg-violet-"],
+  [class^="bg-indigo-"],  [class*=" bg-indigo-"],
+  [class^="bg-blue-"],    [class*=" bg-blue-"],
+  [class^="bg-sky-"],     [class*=" bg-sky-"],
+  [class^="bg-cyan-"],    [class*=" bg-cyan-"],
+  [class^="bg-teal-"],    [class*=" bg-teal-"],
+  [class^="bg-emerald-"], [class*=" bg-emerald-"],
+  [class^="bg-green-"],   [class*=" bg-green-"],
+  [class^="bg-lime-"],    [class*=" bg-lime-"],
+  [class^="bg-yellow-"],  [class*=" bg-yellow-"]
+) {
+  background: var(--win95-face) !important;
+  background-color: var(--win95-face) !important;
+  background-image: none !important;
+}
+
+/* SVG `fill` attribute set via inline style — common on category
+ * icons that the Tailwind class flatten above misses (some icons
+ * carry the color on `style="color: #..."` directly rather than
+ * via a utility class). Force currentColor inheritance. */
+:where(
+  [data-component="ChatSidebar"],
+  [data-component="RightPanel"],
+  [data-component^="ChatArea"],
+  .mari-modal-panel,
+  .os-window
+) svg[style*="color"] {
+  color: var(--win95-text) !important;
+}
+
+/* Tailwind arbitrary CSS-variable tints — `bg-[var(--TOKEN)]/X`,
+ * `border-[var(--TOKEN)]/X`, etc. The named-color flatten above
+ * doesn't catch these because they don't have a `bg-{name}-{shade}`
+ * shape. Two cases worth handling explicitly:
+ *   sidebar-accent — used by ConnectionsPanel for the selected
+ *     connection row (`bg-[var(--sidebar-accent)]/50`); the /50
+ *     opacity makes our navy + grey field mix to a muddy purple.
+ *     Force full opacity navy with white text — the canonical
+ *     Win95 selection look.
+ *   destructive — used by SettingsPanel "Danger Zone" for the
+ *     selected scope row (`bg-[var(--destructive)]/10`) and
+ *     border (`border-[var(--destructive)]/30`); the low alpha
+ *     reads as peach. Flatten to the standard Win95 face + a
+ *     grey shadow border. The destructive RED on `text-` /
+ *     icon stays — that's the Win95-authentic warning color.
+ *   primary — used by some active-state buttons + tab underlines.
+ *     Re-snap to the active titlebar blue. */
+[class^="bg-[var(--sidebar-accent)]"],
+[class*=" bg-[var(--sidebar-accent)]"] {
+  background-color: var(--win95-title-active-1) !important;
+  background-image: none !important;
+  color: var(--win95-hilite) !important;
+}
+[class^="bg-[var(--sidebar-accent)]"] *,
+[class*=" bg-[var(--sidebar-accent)]"] * {
+  color: var(--win95-hilite) !important;
+}
+
+[class^="bg-[var(--destructive)]"],
+[class*=" bg-[var(--destructive)]"] {
+  background-color: var(--win95-face) !important;
+  background-image: none !important;
+}
+[class^="border-[var(--destructive)]"],
+[class*=" border-[var(--destructive)]"] {
+  border-color: var(--win95-shadow) !important;
+}
+
+[class^="bg-[var(--primary)]"],
+[class*=" bg-[var(--primary)]"] {
+  background-color: var(--win95-title-active-1) !important;
+  background-image: none !important;
+}
+
+/* Tailwind gradient utilities (`bg-gradient-to-{br|tr|...}` paired
+ * with `from-{color}-{shade}` and `to-{color}-{shade}`). The
+ * direction utility carries no color but defines the gradient
+ * scaffold; killing `background-image` on it nukes any from/to
+ * color stops the engine sets, regardless of which Tailwind palette
+ * names they used. Used heavily in ConnectionsPanel for provider
+ * badges and category tiles. */
+:where(
+  [data-component="ChatSidebar"],
+  [data-component="RightPanel"],
+  [data-component^="ChatArea"],
+  [data-component="TopBar"],
+  .mari-modal-panel,
+  .os-window
+) :is(
+  [class^="bg-gradient-to"],
+  [class*=" bg-gradient-to"]
+) {
+  background-image: none !important;
+  background-color: var(--win95-face) !important;
+}
+
+/* RecentChats pills on the home page. Engine renders as `<button
+ * class="rounded-lg border border-[var(--border)]/50 bg-[var(--card)]/50
+ * px-2 py-1.5 ...">` with rounded avatar + colored mode-dot badge.
+ * Reframe as raised Win95 buttons + square avatars. */
+[data-component="ChatArea.EmptyState"] button[class*="rounded-lg"][class*="border"][class*="bg-[var(--card)]"] {
+  border-radius: 0 !important;
+  border: 2px solid !important;
+  border-top-color: var(--win95-light) !important;
+  border-left-color: var(--win95-light) !important;
+  border-right-color: var(--win95-dark) !important;
+  border-bottom-color: var(--win95-dark) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--win95-hilite),
+    inset -1px -1px 0 var(--win95-shadow) !important;
+  background: var(--win95-face) !important;
+}
+
+/* RecentChats avatars and mode-dot indicators (rounded-md squares
+ * inside the recent-chat pill — both image and gradient-fallback
+ * tiles). Square them and let the gradient kill above flatten. */
+[data-component="ChatArea.EmptyState"] img.rounded-md,
+[data-component="ChatArea.EmptyState"] div.rounded-md,
+[data-component="ChatArea.EmptyState"] [class*="rounded-md"] {
+  border-radius: 0 !important;
+}
+
+/* Visual Style cards in Settings → Appearance.
+ *   <button class="flex flex-col items-start gap-1 rounded-lg border p-3 ..."
+ *   active: border-[var(--primary)] bg-[var(--primary)]/10 ring-1 ring-[var(--primary)]
+ * Square + bevel as Win95 buttons; active card uses pressed bevel. */
+[data-component="RightPanel"] button.rounded-lg.border.p-3,
+[data-component="RightPanel"] button[class*="rounded-lg"][class*="border"][class*="p-3"] {
+  border-radius: 0 !important;
+  border: 2px solid !important;
+  border-top-color: var(--win95-light) !important;
+  border-left-color: var(--win95-light) !important;
+  border-right-color: var(--win95-dark) !important;
+  border-bottom-color: var(--win95-dark) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--win95-hilite),
+    inset -1px -1px 0 var(--win95-shadow) !important;
+  background: var(--win95-face) !important;
+  color: var(--win95-text) !important;
+  --tw-ring-color: transparent !important;
+}
+
+[data-component="RightPanel"] button[class*="rounded-lg"][class*="border-[var(--primary)]"][class*="bg-[var(--primary)]"] {
+  border-top-color: var(--win95-dark) !important;
+  border-left-color: var(--win95-dark) !important;
+  border-right-color: var(--win95-light) !important;
+  border-bottom-color: var(--win95-light) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--win95-shadow),
+    inset -1px -1px 0 var(--win95-hilite) !important;
+}
+
+/* FAQ rounded pills inside the expanded hero ("PROFESSOR MARI"
+ * label, "N answers" badge, the Q&A "Before You Post A Bug" group,
+ * and any other `rounded-full bg-black/X border` chips). Reframe as
+ * monochrome Win95 chips. */
+[data-component="ChatArea.EmptyState"] [class*="rounded-full"][class*="bg-black"],
+[data-component="ChatArea.EmptyState"] [class*="rounded-full"][class*="border"] {
+  background: var(--win95-face) !important;
+  background-image: none !important;
+  border-radius: 0 !important;
+  border: 1px solid var(--win95-shadow) !important;
+  color: var(--win95-text) !important;
+  text-shadow: none !important;
+}
+
+/* Date / day divider hairline in the conversation message scroll
+ * (the centered "Yesterday" / "Today" text with a thin line either
+ * side). Engine renders the lines as `<span class="h-px flex-1
+ * bg-[var(--border)]/40">`. Reframe as a 2-px Win95 inset rule. */
+.mari-messages-scroll .h-px[class*="bg-[var(--border)"],
+.mari-chat-area .h-px[class*="bg-[var(--border)"] {
+  height: 0 !important;
+  border-top: 1px solid var(--win95-shadow) !important;
+  border-bottom: 1px solid var(--win95-hilite) !important;
+  background: none !important;
 }
 
 /* ── Range sliders ─────────────────────────────────────────────
@@ -1561,7 +2240,9 @@ input[type="color"]::-moz-color-swatch {
 [data-component="ChatArea.EmptyState"] [class*="rounded-3xl"],
 [data-component="ChatArea.EmptyState"] [class*="rounded-xl"],
 [data-component="ChatArea.EmptyState"] [class*="rounded-lg"],
-[data-component="ChatArea.EmptyState"] [class*="rounded-full"] {
+[data-component="ChatArea.EmptyState"] [class*="rounded-md"],
+[data-component="ChatArea.EmptyState"] [class*="rounded-full"],
+[data-component="ChatArea.EmptyState"] [class*="rounded-["] {
   border-radius: 0 !important;
 }
 
@@ -1569,8 +2250,56 @@ input[type="color"]::-moz-color-swatch {
 [data-component="ChatArea.EmptyState"] [class*="shadow-xl"],
 [data-component="ChatArea.EmptyState"] [class*="shadow-md"],
 [data-component="ChatArea.EmptyState"] [class*="shadow-sm"],
-[data-component="ChatArea.EmptyState"] [class*="shadow-2xl"] {
+[data-component="ChatArea.EmptyState"] [class*="shadow-2xl"],
+[data-component="ChatArea.EmptyState"] [class*="shadow-["] {
   box-shadow: none !important;
+}
+
+/* FAQ category badges ("TOP ISSUE", "SETUP", "CORE", "AGENTS",
+ * "CONNECTIONS", etc.). The engine's CATEGORY_STYLES map paints
+ * them as `border-{rose,amber,cyan,emerald,violet,fuchsia,orange}-400
+ * bg-{same}-500/12 text-{same}-200` Tailwind utilities — period
+ * incorrect. Flatten all to mono Win95 chips: shadow-gray field,
+ * white text, hard 1-px black border. */
+[data-component="ChatArea.EmptyState"] [class*="bg-rose-500"],
+[data-component="ChatArea.EmptyState"] [class*="bg-amber-500"],
+[data-component="ChatArea.EmptyState"] [class*="bg-cyan-500"],
+[data-component="ChatArea.EmptyState"] [class*="bg-emerald-500"],
+[data-component="ChatArea.EmptyState"] [class*="bg-violet-500"],
+[data-component="ChatArea.EmptyState"] [class*="bg-fuchsia-500"],
+[data-component="ChatArea.EmptyState"] [class*="bg-orange-500"] {
+  background: var(--win95-shadow) !important;
+  background-image: none !important;
+  color: var(--win95-hilite) !important;
+  border-color: var(--win95-text) !important;
+}
+
+/* Marinara logo. Engine paints `<img src="/logo.png">` inside a
+ * rounded shadowed container — the image itself is a smooth
+ * peach/pink gradient illustration. CSS can't repaint a raster
+ * image into a Win95 bitmap, but full grayscale + boosted contrast
+ * + pixelated rendering brings it close to a 16-color desktop icon
+ * read. The container's bevel is provided by the EmptyState
+ * rounded/shadow kills above. */
+[data-component="ChatArea.EmptyState"] [class*="rounded-2xl"] img,
+[data-component="ChatArea.EmptyState"] [class*="rounded-["] img,
+[data-component="ChatArea.EmptyState"] img[src*="logo"] {
+  filter: grayscale(1) contrast(1.4) brightness(0.95) !important;
+  image-rendering: pixelated !important;
+}
+
+/* Logo container — give it a proper Win95 sunken portrait well so
+ * the desaturated logo sits in a frame instead of floating. */
+[data-component="ChatArea.EmptyState"] [class*="rounded-2xl"][class*="shadow"] {
+  border: 2px solid !important;
+  border-top-color: var(--win95-shadow) !important;
+  border-left-color: var(--win95-shadow) !important;
+  border-right-color: var(--win95-hilite) !important;
+  border-bottom-color: var(--win95-hilite) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--win95-dark),
+    inset -1px -1px 0 var(--win95-light) !important;
+  background: var(--win95-face) !important;
 }
 
 /* Discord / Support footer buttons on the home page. Engine renders
