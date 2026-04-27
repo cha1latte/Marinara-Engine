@@ -1283,36 +1283,99 @@ input[type="radio"]:checked::after {
 }
 
 /* ── Scrollbars (webkit-only — Firefox keeps native) ─────────────── */
-* {
-  scrollbar-width: auto;
-  scrollbar-color: var(--win95-face) var(--win95-shadow);
+/* CRITICAL: do NOT set `scrollbar-color` on `*` here. Chrome
+ * detects the modern `scrollbar-color` property and switches to
+ * NATIVE OS scrollbar rendering (which is rounded on modern
+ * Chrome/Edge), silently ignoring every `::-webkit-scrollbar-*`
+ * pseudo rule below. The chunky Win95 bevel only works when
+ * pseudo-element rendering is in play.
+ *
+ * Firefox doesn't support `::-webkit-scrollbar` and relies on
+ * `scrollbar-color`; targeting only Firefox via @supports keeps
+ * Win95 colors there without breaking Chrome's pseudo styling. */
+@supports (-moz-appearance: none) {
+  * {
+    scrollbar-width: auto;
+    scrollbar-color: var(--win95-face) var(--win95-shadow);
+  }
 }
 
-::-webkit-scrollbar {
-  width: 16px;
-  height: 16px;
+/* Engine's globals.css scrollbar rules sit at low specificity
+ * but win on Tailwind v4's @layer ordering tricks, plus a
+ * @media (pointer: coarse) variant sneaks in a 4-px scrollbar.
+ * Sledgehammer: list every plausible high-specificity selector
+ * that could reach a scrollbar pseudo-element so at least one
+ * beats whatever the engine ships now or later. `#root` gives
+ * us (1,0,1) which trumps anything short of inline style. */
+[data-theme="light"] ::-webkit-scrollbar,
+[data-theme="dark"] ::-webkit-scrollbar,
+[data-theme] ::-webkit-scrollbar,
+#root ::-webkit-scrollbar,
+html[data-theme] ::-webkit-scrollbar,
+html ::-webkit-scrollbar,
+body ::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  width: 16px !important;
+  height: 16px !important;
 }
 
-::-webkit-scrollbar-track {
-  background-color: var(--win95-face);
+[data-theme="light"] ::-webkit-scrollbar-track,
+[data-theme="dark"] ::-webkit-scrollbar-track,
+[data-theme] ::-webkit-scrollbar-track,
+#root ::-webkit-scrollbar-track,
+html[data-theme] ::-webkit-scrollbar-track,
+html ::-webkit-scrollbar-track,
+body ::-webkit-scrollbar-track,
+*::-webkit-scrollbar-track {
+  background-color: #c8c8c8 !important;
   background-image:
     linear-gradient(45deg, var(--win95-light) 25%, transparent 25%, transparent 75%, var(--win95-light) 75%),
-    linear-gradient(45deg, var(--win95-light) 25%, transparent 25%, transparent 75%, var(--win95-light) 75%);
-  background-size: 2px 2px;
-  background-position: 0 0, 1px 1px;
-  background-color: #c8c8c8;
+    linear-gradient(45deg, var(--win95-light) 25%, transparent 25%, transparent 75%, var(--win95-light) 75%) !important;
+  background-size: 2px 2px !important;
+  background-position: 0 0, 1px 1px !important;
+  border-radius: 0 !important;
 }
 
-::-webkit-scrollbar-thumb {
-  background: var(--win95-face);
-  border: 2px solid;
-  border-top-color: var(--win95-light);
-  border-left-color: var(--win95-light);
-  border-right-color: var(--win95-dark);
-  border-bottom-color: var(--win95-dark);
+/* Engine has unscoped `::-webkit-scrollbar-thumb { background:
+ * linear-gradient(...y2k-pink...y2k-purple...); border-radius:
+ * 0.5rem }` AND `[data-theme="light"] ::-webkit-scrollbar-thumb`.
+ * Match BOTH exact selector shapes plus higher-specificity
+ * fallbacks — !important + same-or-higher specificity + later
+ * source order = our Win95 chunky bevel wins. The duplicates
+ * look ugly but each guarantees a different cascade case. */
+[data-theme="light"] ::-webkit-scrollbar-thumb,
+[data-theme="dark"] ::-webkit-scrollbar-thumb,
+[data-theme] ::-webkit-scrollbar-thumb,
+#root ::-webkit-scrollbar-thumb,
+html[data-theme] ::-webkit-scrollbar-thumb,
+html ::-webkit-scrollbar-thumb,
+body ::-webkit-scrollbar-thumb,
+body[class] ::-webkit-scrollbar-thumb,
+*::-webkit-scrollbar-thumb {
+  background: var(--win95-face) !important;
+  background-color: var(--win95-face) !important;
+  background-image: none !important;
+  border: 2px solid !important;
+  border-top-color: var(--win95-light) !important;
+  border-left-color: var(--win95-light) !important;
+  border-right-color: var(--win95-dark) !important;
+  border-bottom-color: var(--win95-dark) !important;
+  border-style: solid !important;
+  border-width: 2px !important;
   box-shadow:
     inset 1px 1px 0 var(--win95-hilite),
-    inset -1px -1px 0 var(--win95-shadow);
+    inset -1px -1px 0 var(--win95-shadow) !important;
+  border-radius: 0 !important;
+  min-height: 20px !important;
+  min-width: 20px !important;
+}
+
+#root ::-webkit-scrollbar-thumb:hover,
+html ::-webkit-scrollbar-thumb:hover,
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--win95-face) !important;
+  background-color: var(--win95-face) !important;
+  background-image: none !important;
 }
 
 ::-webkit-scrollbar-corner {
@@ -1599,16 +1662,15 @@ svg.lucide {
   display: none !important;
 }
 
-/* Inline help-circle icons. The engine sprinkles `<HelpTooltip>`
- * everywhere (next to every Setting field label, every accordion
- * row). Win95 used the title-bar `?` for context help — never
- * inline next to every field. Hide them globally except inside
- * our own win95-titlebar (the close `?` etc.). */
-svg.lucide-help-circle,
-svg.lucide-circle-help,
-svg[class*="lucide-help"] {
-  display: none !important;
-}
+/* Help-circle icons used to be hidden globally here — added back
+ * when we had no pixel-art help glyph and the engine sprinkled
+ * them everywhere (`<HelpTooltip>` next to every settings label).
+ * Now that v2.7+ ships a proper chunky pixel `?` for help-circle
+ * (and the circle-help alias), we WANT them visible — they're
+ * functional context help, and Win95 dialogs DID have `?` icons
+ * next to fields where help was available. Removing the global
+ * hide. The hide was specifically what made the Professor Mari's
+ * FAQ icon render as an empty box. */
 
 /* iOS/2010s-style pill toggles. The Connections panel TTS toggle
  * (and a few others) use a `role="switch"` button with a sliding
@@ -2648,6 +2710,23 @@ input[type="color"]::-moz-color-swatch {
 
 [data-component="ChatArea.EmptyState"] [class*="rounded-2xl"][class*="shadow"] img {
   filter: grayscale(0.7) contrast(0.85);
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+}
+
+/* Engine wraps the home-page logo in `.bunny-glow` (pulsing
+ * orange-to-pink keyframe) and `.animate-pulse-ring` (radial
+ * scale pulse). Both read as 2024 web-app polish; Win95 logos
+ * sat still. Kill the keyframes + any glow shadow they leave
+ * behind. The image inherits the grayscale + pixelated filter
+ * from the rule above so it reads more like a chunky bitmap. */
+.bunny-glow,
+.animate-pulse-ring,
+[class*="animate-pulse-ring"],
+[class*="bunny-glow"] {
+  animation: none !important;
+  box-shadow: none !important;
+  filter: none !important;
 }
 
 [data-component="ChatArea.EmptyState"] .retro-glow-text {
