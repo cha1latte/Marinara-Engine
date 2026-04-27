@@ -231,6 +231,11 @@
   border-left-color: var(--win95-shadow);
   border-right-color: var(--win95-hilite);
   border-bottom-color: var(--win95-hilite);
+  /* Inset shadow deepens the sunken-well look — real Win95 status
+   * panes had this two-pixel inset, not the flat 1px border alone. */
+  box-shadow:
+    inset 1px 1px 0 var(--win95-dark),
+    inset -1px -1px 0 var(--win95-light);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -942,11 +947,8 @@ body,
  * gradient (selection blue), assistant bubbles get the white sunken
  * text-well look. */
 .mari-message-bubble.texting-bubble-user {
-  background: linear-gradient(
-    to bottom,
-    var(--win95-title-active-1) 0%,
-    var(--win95-title-active-2) 100%
-  ) !important;
+  background: var(--win95-title-active-1) !important;
+  background-image: none !important;
   color: var(--win95-hilite) !important;
   box-shadow: none !important;
   border-radius: 0 !important;
@@ -989,14 +991,11 @@ body,
 }
 
 .mari-message-user .mari-message-bubble:not(.texting-bubble) {
-  background: linear-gradient(
-    to bottom,
-    var(--win95-title-active-1) 0%,
-    var(--win95-title-active-2) 100%
-  ) !important;
+  background: var(--win95-title-active-1) !important;
+  background-image: none !important;
   color: var(--win95-hilite) !important;
-  border-top-color: var(--win95-title-active-2) !important;
-  border-left-color: var(--win95-title-active-2) !important;
+  border-top-color: var(--win95-title-active-1) !important;
+  border-left-color: var(--win95-title-active-1) !important;
   border-right-color: var(--win95-title-active-1) !important;
   border-bottom-color: var(--win95-title-active-1) !important;
   box-shadow: none !important;
@@ -2325,8 +2324,9 @@ input[type="color"]::-moz-color-swatch {
 
 /* Marinara wordmark sparkles `✧ Marinara Engine ✧` + similar
  * decorative glyphs (✨, ⋆, ✦) anywhere they decorate Marinara
- * branding. Keep the text but trim the obvious modern-chrome
- * sparkle animation if present. */
+ * branding. The literal Unicode characters inside `.retro-glow-text`
+ * are stripped by JS (sparkleStrip in win95-theme.js) on the 1Hz
+ * reconcile tick. CSS just removes the modern glow effect. */
 .retro-glow-text {
   text-shadow: none !important;
   background: none !important;
@@ -2336,6 +2336,43 @@ input[type="color"]::-moz-color-swatch {
   -webkit-background-clip: border-box !important;
   color: var(--win95-text) !important;
   animation: none !important;
+}
+
+/* ── Hyperlinks ───────────────────────────────────────────────
+ * Win95 classic links — `#0000ee` solid blue with underline,
+ * `#551a8b` purple after visit. Engine renders home-page links
+ * (Marinara / LinkAPI / Huntercolliex etc.) with Tailwind
+ * `text-primary` / `text-blue-X` and inconsistent underlining.
+ * Force the canonical IE3-era treatment everywhere inside our
+ * chrome surfaces and the home page. Skips anchors inside
+ * message-content (chat body) so users can keep their content
+ * styling intact. */
+:where(
+  [data-component="ChatSidebar"],
+  [data-component="RightPanel"],
+  [data-component^="ChatArea"],
+  [data-component="TopBar"],
+  .mari-modal-panel,
+  .os-window
+) a:not(.mari-message-content a):not(.win95-skip) {
+  color: var(--win95-link) !important;
+  text-decoration: underline !important;
+  text-shadow: none !important;
+  background: none !important;
+  background-image: none !important;
+  -webkit-text-fill-color: var(--win95-link) !important;
+}
+
+:where(
+  [data-component="ChatSidebar"],
+  [data-component="RightPanel"],
+  [data-component^="ChatArea"],
+  [data-component="TopBar"],
+  .mari-modal-panel,
+  .os-window
+) a:not(.mari-message-content a):not(.win95-skip):visited {
+  color: #551a8b !important;
+  -webkit-text-fill-color: #551a8b !important;
 }
 
 /* ── Settings panel (own UI — Ctrl+Shift+9 / #win95) ─────────────── */
