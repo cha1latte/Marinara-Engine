@@ -19,9 +19,20 @@
   font-display: swap;
 }
 
-/* ── Palette + tokens (overrides engine vars in both light & dark) ── */
+/* ── Palette + tokens ──────────────────────────────────────────────
+ * The theme honors the engine's native dark / light toggle in
+ * Settings → Appearance. Both palettes share the same CSS-variable
+ * names, so every component below `var(--win95-face)` etc. adapts
+ * automatically — only the ~4 hardcoded literals that needed
+ * separate values per theme are tokenized too (link, visited
+ * link, scrollbar track, tooltip stays cream in both since it
+ * reads fine on either background).
+ *
+ * Bevel logic depends on a strict lightness ordering (dark <
+ * shadow < face < light < hilite). Both palettes preserve that
+ * ordering so raised/inset bevels look right in either mode. */
+
 :root,
-[data-theme="dark"],
 [data-theme="light"] {
   --win95-face: #c0c0c0;
   --win95-light: #dfdfdf;
@@ -37,8 +48,60 @@
   --win95-selection-bg: #000080;
   --win95-selection-fg: #ffffff;
   --win95-link: #0000ee;
+  --win95-link-visited: #551a8b;
+  --win95-track-bg: #c8c8c8;
 
-  /* Engine semantic tokens — re-pointed at the Win95 palette */
+  /* Semantic tokens — split from bevel tokens so dark mode can
+   * remap them independently. In light mode they happen to
+   * coincide with bevel colors, but in dark mode the bevel
+   * `--win95-shadow` becomes near-black (invisible as muted
+   * text) and `--win95-hilite` becomes grey (invisible as text-
+   * on-navy). These tokens always carry the SEMANTIC meaning. */
+  --win95-on-accent: #ffffff;        /* text on navy/destructive backgrounds */
+  --win95-muted-text: #606060;       /* muted typography (subtitles, hints) */
+
+  --accent: #d4d0c8;
+  --destructive: #aa0000;
+
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --win95-face: #2d2d2d;
+  --win95-light: #4a4a4a;
+  --win95-hilite: #5a5a5a;
+  --win95-shadow: #1a1a1a;
+  --win95-dark: #0a0a0a;
+  --win95-text: #e0e0e0;
+  --win95-disabled-text: #909090;
+  --win95-title-active-1: #000080;
+  --win95-title-active-2: #1084d0;
+  --win95-title-inactive-1: #303030;
+  --win95-title-inactive-2: #4a4a4a;
+  --win95-selection-bg: #000080;
+  --win95-selection-fg: #ffffff;
+  --win95-link: #6699ff;
+  --win95-link-visited: #b48cf0;
+  --win95-track-bg: #1a1a1a;
+
+  /* Semantic remap for dark mode. */
+  --win95-on-accent: #ffffff;        /* white stays white on navy/red */
+  --win95-muted-text: #a8a8a8;       /* light grey for muted text on dark */
+
+  --accent: #353535;
+  --destructive: #cc4444;
+
+  color-scheme: dark;
+}
+
+/* Shared bindings — engine semantic tokens re-pointed at Win95
+ * palette tokens. The win95-* tokens differ per theme so these
+ * bindings adapt automatically. The semantic-vs-bevel split
+ * (`win95-on-accent`, `win95-muted-text`) ensures readable text
+ * on accent surfaces and muted typography in BOTH modes. */
+:root,
+[data-theme="light"],
+[data-theme="dark"] {
   --background: var(--win95-face);
   --foreground: var(--win95-text);
   --card: var(--win95-face);
@@ -46,15 +109,13 @@
   --popover: var(--win95-face);
   --popover-foreground: var(--win95-text);
   --primary: var(--win95-title-active-1);
-  --primary-foreground: var(--win95-hilite);
+  --primary-foreground: var(--win95-on-accent);
   --secondary: var(--win95-face);
   --secondary-foreground: var(--win95-text);
   --muted: var(--win95-face);
-  --muted-foreground: var(--win95-shadow);
-  --accent: #d4d0c8;
+  --muted-foreground: var(--win95-muted-text);
   --accent-foreground: var(--win95-text);
-  --destructive: #aa0000;
-  --destructive-foreground: var(--win95-hilite);
+  --destructive-foreground: var(--win95-on-accent);
   --border: var(--win95-shadow);
   --input: var(--win95-hilite);
   --ring: var(--win95-title-active-1);
@@ -63,7 +124,7 @@
   --sidebar-foreground: var(--win95-text);
   --sidebar-border: var(--win95-shadow);
   --sidebar-accent: var(--win95-title-active-1);
-  --sidebar-accent-foreground: var(--win95-hilite);
+  --sidebar-accent-foreground: var(--win95-on-accent);
 
   --radius: 0;
 
@@ -72,8 +133,6 @@
     "Microsoft Sans Serif", Tahoma, Geneva, sans-serif;
 
   --app-font-size: 0.75rem;
-
-  color-scheme: light;
 }
 
 /* Selection highlight is a global signature of the theme. */
@@ -140,7 +199,7 @@
     var(--win95-title-active-1) 0%,
     var(--win95-title-active-2) 100%
   );
-  color: var(--win95-hilite);
+  color: var(--win95-on-accent);
   font-family: var(--font-y2k);
   font-size: 11px;
   font-weight: 700;
@@ -591,7 +650,7 @@ body,
 
 .mari-message-user .mari-message-bubble:not(.texting-bubble) .mari-message-content,
 .mari-message-user .mari-message-bubble:not(.texting-bubble) .mari-message-content * {
-  color: var(--win95-hilite) !important;
+  color: var(--win95-on-accent) !important;
 }
 
 /* Square + bevel message avatars. The Discord-style Conversation
@@ -919,7 +978,7 @@ button.mari-chat-send-btn:has(svg[class*="circle-stop"])::after {
 [data-component="RightPanel"] span[class*="bg-fuchsia-400"],
 [data-component="RightPanel"] span[class*="bg-sky-400"] {
   background: var(--win95-shadow) !important;
-  color: var(--win95-hilite) !important;
+  color: var(--win95-on-accent) !important;
   border-radius: 0 !important;
   padding: 1px 4px !important;
   font-family: var(--font-y2k);
@@ -1065,7 +1124,7 @@ body,
 .mari-message-bubble.texting-bubble-user {
   background: var(--win95-title-active-1) !important;
   background-image: none !important;
-  color: var(--win95-hilite) !important;
+  color: var(--win95-on-accent) !important;
   box-shadow: none !important;
   border-radius: 0 !important;
 }
@@ -1109,7 +1168,7 @@ body,
 .mari-message-user .mari-message-bubble:not(.texting-bubble) {
   background: var(--win95-title-active-1) !important;
   background-image: none !important;
-  color: var(--win95-hilite) !important;
+  color: var(--win95-on-accent) !important;
   border-top-color: var(--win95-title-active-1) !important;
   border-left-color: var(--win95-title-active-1) !important;
   border-right-color: var(--win95-title-active-1) !important;
@@ -1125,7 +1184,7 @@ body,
  * `.mari-message-content` rule. */
 [data-component="ChatArea.Roleplay"] .mari-message-user .mari-message-content,
 [data-component="ChatArea.Roleplay"] .mari-message-user .mari-message-content * {
-  color: var(--win95-hilite) !important;
+  color: var(--win95-on-accent) !important;
 }
 
 /* The engine hardcodes `.mari-message-content { color: #c3c2c2 }` in
@@ -1143,7 +1202,7 @@ body,
 
 .mari-message-bubble.texting-bubble-user .mari-message-content,
 .mari-message-bubble.texting-bubble-user .mari-message-content * {
-  color: var(--win95-hilite) !important;
+  color: var(--win95-on-accent) !important;
 }
 
 /* ── Form controls ─────────────────────────────────────────────── */
@@ -1230,7 +1289,7 @@ select {
   -webkit-appearance: none !important;
   -moz-appearance: none !important;
   padding-right: 22px !important;
-  background-color: var(--win95-hilite) !important;
+  background-color: var(--win95-on-accent) !important;
   background-image:
     url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'><rect width='16' height='16' fill='%23c0c0c0'/><polyline points='0,15 0,0 15,0' stroke='%23ffffff' fill='none'/><polyline points='1,14 1,1 14,1' stroke='%23dfdfdf' fill='none'/><polyline points='15,0 15,15 0,15' stroke='%23404040' fill='none'/><polyline points='14,1 14,14 1,14' stroke='%23808080' fill='none'/><polygon points='5,7 11,7 8,10' fill='%23000000'/></svg>") !important;
   background-repeat: no-repeat !important;
@@ -1356,7 +1415,7 @@ html[data-theme] ::-webkit-scrollbar-track,
 html ::-webkit-scrollbar-track,
 body ::-webkit-scrollbar-track,
 *::-webkit-scrollbar-track {
-  background-color: #c8c8c8 !important;
+  background-color: var(--win95-track-bg) !important;
   background-image:
     linear-gradient(45deg, var(--win95-light) 25%, transparent 25%, transparent 75%, var(--win95-light) 75%),
     linear-gradient(45deg, var(--win95-light) 25%, transparent 25%, transparent 75%, var(--win95-light) 75%) !important;
@@ -1574,7 +1633,7 @@ html ::-webkit-scrollbar-thumb:hover,
 }
 
 .mari-modal-panel > .shrink-0.flex.items-center.justify-between > h2 {
-  color: var(--win95-hilite) !important;
+  color: var(--win95-on-accent) !important;
   font-size: 0.6875rem !important;
   font-weight: bold !important;
   margin: 0 !important;
@@ -1852,7 +1911,7 @@ svg.lucide {
     var(--win95-title-active-1) 0%,
     var(--win95-title-active-2) 100%
   ) !important;
-  color: var(--win95-hilite) !important;
+  color: var(--win95-on-accent) !important;
   height: 22px !important;
   min-height: 22px !important;
   padding: 2px 4px !important;
@@ -1863,7 +1922,7 @@ svg.lucide {
 
 .mari-right-panel-header *,
 [data-component="RightPanel"] > div:first-child * {
-  color: var(--win95-hilite) !important;
+  color: var(--win95-on-accent) !important;
 }
 
 /* Footer hyperlinks on the home page (engine renders as
@@ -1876,7 +1935,7 @@ svg.lucide {
 }
 
 [data-component="ChatArea.EmptyState"] a:visited {
-  color: #800080 !important; /* Win95 visited-link purple */
+  color: var(--win95-link-visited) !important; /* Win95 visited purple — light mode #551a8b, dark mode #b48cf0 */
 }
 
 [data-component="ChatArea.EmptyState"] a:hover {
@@ -2415,11 +2474,11 @@ input[type="search"][placeholder^="Search "] {
 [class*=" bg-[var(--sidebar-accent)]"] {
   background-color: var(--win95-title-active-1) !important;
   background-image: none !important;
-  color: var(--win95-hilite) !important;
+  color: var(--win95-on-accent) !important;
 }
 [class^="bg-[var(--sidebar-accent)]"] *,
 [class*=" bg-[var(--sidebar-accent)]"] * {
-  color: var(--win95-hilite) !important;
+  color: var(--win95-on-accent) !important;
 }
 
 [class^="bg-[var(--destructive)]"],
@@ -2452,11 +2511,11 @@ input[type="search"][placeholder^="Search "] {
 :not(button)[class*=" bg-[var(--primary)]"] {
   background-color: var(--win95-title-active-1) !important;
   background-image: none !important;
-  color: var(--win95-hilite) !important;
+  color: var(--win95-on-accent) !important;
 }
 :not(button)[class^="bg-[var(--primary)]"] *,
 :not(button)[class*=" bg-[var(--primary)]"] * {
-  color: var(--win95-hilite) !important;
+  color: var(--win95-on-accent) !important;
 }
 
 /* Case 2: solid bg-primary on a <button> → grey raised. The
@@ -2847,7 +2906,7 @@ input[type="color"]::-moz-color-swatch {
 [data-component="ChatArea.EmptyState"] [class*="bg-orange-500"] {
   background: var(--win95-shadow) !important;
   background-image: none !important;
-  color: var(--win95-hilite) !important;
+  color: var(--win95-on-accent) !important;
   border-color: var(--win95-text) !important;
 }
 
@@ -3025,8 +3084,8 @@ input[type="color"]::-moz-color-swatch {
   .mari-modal-panel,
   .os-window
 ) a:not(.mari-message-content a):not(.win95-skip):visited {
-  color: #551a8b !important;
-  -webkit-text-fill-color: #551a8b !important;
+  color: var(--win95-link-visited) !important;
+  -webkit-text-fill-color: var(--win95-link-visited) !important;
 }
 
 /* ── Boot splash (Win95-style "Starting Marinara…" splash) ───────
@@ -3047,7 +3106,7 @@ input[type="color"]::-moz-color-swatch {
   justify-content: center;
   cursor: pointer;
   font-family: var(--font-y2k);
-  color: var(--win95-hilite);
+  color: var(--win95-on-accent);
   /* Skip the chrome animation defeat — the splash needs its
    * progress-bar fill animation to actually run. */
   animation: win95-boot-fade-in 200ms ease-out;
@@ -3186,7 +3245,7 @@ input[type="color"]::-moz-color-swatch {
     var(--win95-title-active-1) 0%,
     var(--win95-title-active-2) 100%
   );
-  color: var(--win95-hilite);
+  color: var(--win95-on-accent);
   font-weight: 700;
   user-select: none;
 }
