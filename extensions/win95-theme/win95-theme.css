@@ -59,6 +59,7 @@
    * on-navy). These tokens always carry the SEMANTIC meaning. */
   --win95-on-accent: #ffffff;        /* text on navy/destructive backgrounds */
   --win95-muted-text: #606060;       /* muted typography (subtitles, hints) */
+  --win95-input-bg: #ffffff;         /* text-field / select / textarea fill */
 
   --accent: #d4d0c8;
   --destructive: #aa0000;
@@ -87,6 +88,7 @@
   /* Semantic remap for dark mode. */
   --win95-on-accent: #ffffff;        /* white stays white on navy/red */
   --win95-muted-text: #a8a8a8;       /* light grey for muted text on dark */
+  --win95-input-bg: #1a1a1a;         /* dark text-fields so light text reads */
 
   --accent: #353535;
   --destructive: #cc4444;
@@ -117,7 +119,7 @@
   --accent-foreground: var(--win95-text);
   --destructive-foreground: var(--win95-on-accent);
   --border: var(--win95-shadow);
-  --input: var(--win95-hilite);
+  --input: var(--win95-input-bg);
   --ring: var(--win95-title-active-1);
 
   --sidebar: var(--win95-face);
@@ -169,7 +171,7 @@
   box-shadow:
     inset 1px 1px 0 var(--win95-dark),
     inset -1px -1px 0 var(--win95-light);
-  background: var(--win95-hilite);
+  background: var(--win95-input-bg);
   border-radius: 0;
 }
 
@@ -701,7 +703,7 @@ body,
  * frame each body in a sunken white text-well. Roleplay-mode bubbles
  * are styled separately above and aren't affected. */
 [data-component="ChatArea.Conversation"] .mari-message-content {
-  background: var(--win95-hilite);
+  background: var(--win95-input-bg);
   color: var(--win95-text);
   border: 1px solid;
   border-top-color: var(--win95-shadow);
@@ -824,7 +826,7 @@ button.mari-chat-send-btn:has(svg[class*="circle-stop"])::after {
 }
 
 .mari-chat-input-textarea {
-  background: var(--win95-hilite) !important;
+  background: var(--win95-input-bg) !important;
   color: var(--win95-text) !important;
   border: 2px solid !important;
   border-top-color: var(--win95-shadow) !important;
@@ -1130,7 +1132,7 @@ body,
 }
 
 .mari-message-bubble.texting-bubble-other {
-  background: var(--win95-hilite) !important;
+  background: var(--win95-input-bg) !important;
   color: var(--win95-text) !important;
   border: 2px solid;
   border-top-color: var(--win95-shadow);
@@ -1152,7 +1154,7 @@ body,
  * ChatMessage.tsx:1068, which we use to differentiate user vs
  * assistant for the navy/white treatment. */
 .mari-message-bubble:not(.texting-bubble) {
-  background: var(--win95-hilite) !important;
+  background: var(--win95-input-bg) !important;
   color: var(--win95-text) !important;
   border: 2px solid !important;
   border-top-color: var(--win95-shadow) !important;
@@ -1264,7 +1266,7 @@ select {
   font-family: var(--font-y2k);
   font-size: 11px;
   color: var(--win95-text);
-  background: var(--win95-hilite);
+  background: var(--win95-input-bg);
   border: 2px solid;
   border-top-color: var(--win95-shadow);
   border-left-color: var(--win95-shadow);
@@ -1289,7 +1291,7 @@ select {
   -webkit-appearance: none !important;
   -moz-appearance: none !important;
   padding-right: 22px !important;
-  background-color: var(--win95-on-accent) !important;
+  background-color: var(--win95-input-bg) !important;
   background-image:
     url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'><rect width='16' height='16' fill='%23c0c0c0'/><polyline points='0,15 0,0 15,0' stroke='%23ffffff' fill='none'/><polyline points='1,14 1,1 14,1' stroke='%23dfdfdf' fill='none'/><polyline points='15,0 15,15 0,15' stroke='%23404040' fill='none'/><polyline points='14,1 14,14 1,14' stroke='%23808080' fill='none'/><polygon points='5,7 11,7 8,10' fill='%23000000'/></svg>") !important;
   background-repeat: no-repeat !important;
@@ -1319,7 +1321,7 @@ input[type="radio"] {
   -webkit-appearance: none;
   width: 13px;
   height: 13px;
-  background: var(--win95-hilite);
+  background: var(--win95-input-bg);
   border: 2px solid;
   border-top-color: var(--win95-shadow);
   border-left-color: var(--win95-shadow);
@@ -1701,7 +1703,7 @@ html ::-webkit-scrollbar-thumb:hover,
 .os-window input:not([type]),
 .os-window textarea,
 .os-window select {
-  background: var(--win95-hilite) !important;
+  background: var(--win95-input-bg) !important;
   color: var(--win95-text) !important;
   border-radius: 0 !important;
   --tw-ring-color: transparent !important;
@@ -3282,6 +3284,6 @@ input[type="color"]::-moz-color-swatch {
   border-left-color: var(--win95-shadow);
   border-right-color: var(--win95-hilite);
   border-bottom-color: var(--win95-hilite);
-  background: var(--win95-hilite);
+  background: var(--win95-input-bg);
   color: var(--win95-text);
 }
