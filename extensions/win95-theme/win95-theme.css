@@ -2019,6 +2019,79 @@ div[class*="rounded-full"]:not(.mari-message-content *):not(.win95-skip):has(> d
   color: var(--win95-text) !important;
 }
 
+/* ── Force W95FA across all UI text ──────────────────────────
+ * The engine's `body` rule sets `font-family: var(--font-y2k)`
+ * which we already point at W95FA, but Tailwind utility classes
+ * and component-level inline `font-family` rules can override on
+ * individual elements (the Settings → Appearance "Default
+ * (Inter)" preview etc). Force the W95FA chain everywhere
+ * except code blocks (which keep monospace) so the typography
+ * is consistently Win95-y across every surface. */
+html, body, button, input, textarea, select, label,
+h1, h2, h3, h4, h5, h6,
+p, span, div, a, li, td, th, dt, dd, summary,
+[class*="font-sans"], [class*="font-display"], [class*="font-serif"] {
+  font-family: var(--font-y2k) !important;
+}
+code, pre, kbd, samp, var, tt,
+[class*="font-mono"] {
+  font-family: ui-monospace, "Consolas", "Monaco", "Courier New", monospace !important;
+}
+
+/* ── Round + soft-shadow defeat (broad pass) ─────────────────
+ * Many chrome elements still escape the per-component squaring:
+ * character tag pills (`rounded-lg bg-emerald-500/5`), preset
+ * cards, settings cards, tooltips with `shadow-lg`, etc. Force
+ * border-radius: 0 on every rounded utility (rounded-sm, -md,
+ * -lg, -xl, -2xl, -3xl, -full) and box-shadow: none on common
+ * shadow utilities. Carve-outs preserve chat content + our own
+ * decorative buttons + image elements. */
+[class*="rounded-sm"]:not(.mari-message-content *):not(.mari-message-bubble *):not(.win95-skip):not(img),
+[class*="rounded-md"]:not(.mari-message-content *):not(.mari-message-bubble *):not(.win95-skip):not(img),
+[class*="rounded-lg"]:not(.mari-message-content *):not(.mari-message-bubble *):not(.win95-skip):not(img),
+[class*="rounded-xl"]:not(.mari-message-content *):not(.mari-message-bubble *):not(.win95-skip):not(img),
+[class*="rounded-2xl"]:not(.mari-message-content *):not(.mari-message-bubble *):not(.win95-skip):not(img),
+[class*="rounded-3xl"]:not(.mari-message-content *):not(.mari-message-bubble *):not(.win95-skip):not(img),
+[class*="rounded-full"]:not(.mari-message-content *):not(.mari-message-bubble *):not(.win95-skip):not(img) {
+  border-radius: 0 !important;
+}
+
+/* Soft drop-shadows are a 2010s+ design convention; Win95 had
+ * crisp single-pixel borders, no shadows. Kill `shadow-*`
+ * utilities on chrome elements + reset Tailwind's shadow CSS
+ * variables so any inherited shadow goes silent. */
+:where(
+  [data-component="ChatSidebar"],
+  [data-component="RightPanel"],
+  [data-component^="ChatArea"],
+  [data-component="TopBar"],
+  .mari-modal-panel,
+  .os-window
+) [class*="shadow-"]:not(.mari-message-content *):not(.mari-message-bubble *) {
+  box-shadow: none !important;
+  --tw-shadow: 0 0 #0000 !important;
+  --tw-shadow-colored: 0 0 #0000 !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  filter: none !important;
+}
+
+/* Hover tooltips (`HelpTooltip` component renders a floating
+ * panel with `shadow-lg` and rounded corners). Target by common
+ * patterns: `[role="tooltip"]`, `[data-state="open"][data-side]`
+ * (Radix tooltip), `.tooltip`, anything absolutely-positioned
+ * with shadow-lg. Square + flatten — Win95 tooltips were a flat
+ * cream-on-black panel with a 1-px black border. */
+[role="tooltip"],
+[data-radix-popper-content-wrapper] > *,
+.tooltip {
+  border-radius: 0 !important;
+  box-shadow: 1px 1px 0 var(--win95-text) !important;
+  background: #ffffe0 !important;
+  color: var(--win95-text) !important;
+  border: 1px solid var(--win95-text) !important;
+  font-family: var(--font-y2k) !important;
+}
+
 /* ── Chat surface background reset ───────────────────────────
  * Engine often layers `bg-[var(--background)]/X` or similar
  * semi-transparent tints on the chat surface that read as a
