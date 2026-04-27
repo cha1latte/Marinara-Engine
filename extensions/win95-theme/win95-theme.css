@@ -789,6 +789,25 @@ button.mari-chat-send-btn:has(svg[class*="circle-stop"])::after {
   padding: 2px 6px !important;
 }
 
+/* Persona/character avatar button in the chat input bar — the
+ * engine wraps a `<img class="h-full w-full ...">` in a `<button
+ * class="h-8 w-8 ... rounded-full overflow-hidden">`, but our
+ * `width: auto / height: auto` rule above strips the parent
+ * constraint, leaving the img to grow to its intrinsic 225×225
+ * natural size. Re-pin avatar-bearing buttons to 2rem so they
+ * stay small + circular like vanilla Marinara. */
+.mari-chat-input-box button:has(> img),
+.mari-chat-input-box button:has(> div > img) {
+  width: 2rem !important;
+  height: 2rem !important;
+  min-width: 2rem !important;
+  min-height: 2rem !important;
+  max-width: 2rem !important;
+  max-height: 2rem !important;
+  padding: 0 !important;
+  flex-shrink: 0 !important;
+}
+
 /* Persona status footer at the bottom of the chat sidebar
  * (UserStatusFooter — green dot + "Active" / "Idle" / "DND" label).
  * Reframe the row as a Win95 sunken status-bar cell so it visually
