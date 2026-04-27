@@ -908,6 +908,24 @@ body,
  * active via :has() over the underline span (only mounted on the
  * active tab — see SettingsPanel.tsx). The native underline span is
  * hidden since the bevel state already conveys selection. */
+/* Force the tab row to a single non-wrapping line. Aggressive
+ * compression (10px font + 1px-3px padding) is enough to fit all
+ * six tabs (General/Appearance/Themes/Extensions/Import/Advanced)
+ * inside the typical right-panel width (≈ 320–380 px). The
+ * scrollbar is hidden as a fallback so any narrow viewport that
+ * still overflows scrolls invisibly rather than showing the ugly
+ * native scrollbar inline with the chrome. */
+[data-component="RightPanel"] .border-b {
+  flex-wrap: nowrap !important;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+[data-component="RightPanel"] .border-b::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
 [data-component="RightPanel"] .border-b > button {
   background: var(--win95-face) !important;
   color: var(--win95-text) !important;
@@ -920,9 +938,13 @@ body,
     inset 1px 1px 0 var(--win95-hilite),
     inset -1px -1px 0 var(--win95-shadow) !important;
   border-radius: 0 !important;
-  padding: 3px 10px !important;
+  padding: 1px 3px !important;
   min-height: 0 !important;
-  margin: 0 1px 0 0;
+  margin: 0 1px 0 0 !important;
+  font-size: 0.625rem !important;
+  white-space: nowrap !important;
+  letter-spacing: 0 !important;
+  flex-shrink: 0 !important;
 }
 
 [data-component="RightPanel"] .border-b > button:has(> span[class*="bg-[var(--primary)]"]) {
@@ -1876,6 +1898,173 @@ svg[class*="lucide-help"] {
   background-image: none !important;
 }
 
+/* ── Chat surface background reset ───────────────────────────
+ * Engine often layers `bg-[var(--background)]/X` or similar
+ * semi-transparent tints on the chat surface that read as a
+ * greenish/warmer tint over our flat #c0c0c0 face. Force the
+ * chat surface itself + its immediate scroll wrapper to plain
+ * Win95 face — no gradients, no transparent overlays. */
+.mari-chat-area,
+.rpg-chat-area,
+[data-component="ChatArea.Conversation"],
+[data-component="ChatArea.Roleplay"],
+[data-component="ChatArea.Conversation"] > div:not([data-win95-chrome]),
+[data-component="ChatArea.Roleplay"] > div:not([data-win95-chrome]) {
+  background: var(--win95-face) !important;
+  background-color: var(--win95-face) !important;
+  background-image: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* ── Unscoped placeholder-gradient defeat ────────────────────
+ * No-image character cards in the Library / Browser render a
+ * pink-to-blue gradient placeholder via `bg-gradient-to-br
+ * from-pink-200 to-sky-200` (or similar). The earlier scoped
+ * gradient flatten misses these because the Library mounts in
+ * a context not in our chrome scope list. Apply the flatten
+ * unscoped — exclude only chat user-bubble (which intentionally
+ * uses a navy-gradient look that we already flattened separately
+ * to a flat solid). */
+[class*="bg-gradient-to"]:not(.mari-message-bubble):not(.mari-message-content *) {
+  background-image: none !important;
+  background: var(--win95-face) !important;
+}
+
+/* ── Unscoped muted-text defeat ──────────────────────────────
+ * `text-foreground/X` and `text-muted-foreground` etc. produce
+ * 30–60% black on the dark Y2K theme — illegible on Win95 grey.
+ * Unscoped force to full opacity black, exclude chat content. */
+[class*="text-foreground/"]:not(.mari-message-content *):not(.mari-message-bubble *),
+[class*="text-muted-foreground"]:not(.mari-message-content *):not(.mari-message-bubble *) {
+  color: var(--win95-text) !important;
+  opacity: 1 !important;
+}
+
+/* ── Square the rounded-full badges & buttons ───────────────
+ * Engine uses `rounded-full` for tag pills (assistant, guide,
+ * etc), avatar containers (already squared via image rule), and
+ * some action buttons. Square the badges + general containers
+ * but skip <img> (avatar pixelation rule already squares those)
+ * and `.win95-skip` (our own decorative buttons). */
+[class*="rounded-full"]:not(img):not(.win95-skip):not(.mari-message-content *):not(.mari-message-bubble *) {
+  border-radius: 0 !important;
+}
+
+/* ── Last-resort accent flatten (unscoped) ────────────────────
+ * The :where(...) scope above misses elements that mount outside
+ * our predeclared chrome surfaces (e.g. ChubAI character browser
+ * cards rendered inside a modal whose className signature changes
+ * per breakpoint, lorebook editor's amber Enabled toggle, presets
+ * panel cards). Apply text-pink/rose/red/amber/yellow/orange flat
+ * globally to anything NOT inside `.mari-message-content` (chat
+ * body) or `.mari-message-bubble` (so user message bubbles keep
+ * white text). The destructive red (`text-[var(--destructive)]`)
+ * uses arbitrary-value syntax so it doesn't match these named-
+ * color patterns and stays as the Win95 warning red. */
+[class*="text-pink-"]:not(.mari-message-content *):not(.mari-message-bubble *),
+[class*="text-rose-"]:not(.mari-message-content *):not(.mari-message-bubble *),
+[class*="text-red-"]:not(.mari-message-content *):not(.mari-message-bubble *),
+[class*="text-amber-"]:not(.mari-message-content *):not(.mari-message-bubble *),
+[class*="text-orange-"]:not(.mari-message-content *):not(.mari-message-bubble *),
+[class*="text-yellow-"]:not(.mari-message-content *):not(.mari-message-bubble *) {
+  color: var(--win95-text) !important;
+}
+
+/* ── Muted-text contrast boost ────────────────────────────────
+ * Engine subtitles use `text-foreground/40` / `text-foreground/50`
+ * etc — fine on the dark Y2K theme but illegible on Win95's
+ * #c0c0c0 face. Force full opacity on chrome-side muted text so
+ * subtitles in Presets, Agents, Lorebook entries, etc. read as
+ * the same #000 as the rest of the chrome. Scope avoids chat
+ * body so message-content opacity tokens stay user-styled. */
+:where(
+  [data-component="ChatSidebar"],
+  [data-component="RightPanel"],
+  [data-component="TopBar"],
+  .mari-modal-panel,
+  .os-window
+) [class*="text-foreground/"]:not(.mari-message-content *) {
+  color: var(--win95-text) !important;
+  opacity: 1 !important;
+}
+
+/* CRITICAL: Engine wraps lists in `.stagger-children` which uses a
+ * CSS keyframe to fade children in from opacity:0. Killing all
+ * animations (rule below) freezes them at opacity:0 — characters,
+ * presets, agents, and other listed items VANISH. Force opacity:1
+ * + reset transform so list children stay visible regardless of
+ * the animation's frozen state. Place this BEFORE the animation
+ * defeat so source order is irrelevant — cascade wins on
+ * specificity (0,1,1) > (0,1,0). */
+.stagger-children > * {
+  opacity: 1 !important;
+  transform: none !important;
+  animation: none !important;
+}
+
+/* ── Defeat hover/scale/floating animations ───────────────────
+ * Engine sprinkles `transition-all`, `active:scale-90`,
+ * `hover:scale-105`, `animate-pulse` etc. These soft-elastic
+ * effects feel modern; Win95 controls were strictly state-snap.
+ * Kill transitions/animations and identity transforms inside
+ * chrome surfaces. Scoped to chrome only so chat content
+ * (typing dots, streaming animations) keeps its motion. */
+:where(
+  [data-component="ChatSidebar"],
+  [data-component="RightPanel"],
+  [data-component="TopBar"],
+  .mari-modal-panel,
+  .os-window
+) [class*="transition-"]:not(.mari-message-content *),
+:where(
+  [data-component="ChatSidebar"],
+  [data-component="RightPanel"],
+  [data-component="TopBar"],
+  .mari-modal-panel,
+  .os-window
+) [class*="animate-"]:not(.mari-message-content *) {
+  transition: none !important;
+  animation: none !important;
+}
+:where(
+  [data-component="ChatSidebar"],
+  [data-component="RightPanel"],
+  [data-component="TopBar"],
+  .mari-modal-panel,
+  .os-window
+) [class*="hover:scale"]:not(.mari-message-content *):hover,
+:where(
+  [data-component="ChatSidebar"],
+  [data-component="RightPanel"],
+  [data-component="TopBar"],
+  .mari-modal-panel,
+  .os-window
+) [class*="active:scale"]:not(.mari-message-content *):active,
+:where(
+  [data-component="ChatSidebar"],
+  [data-component="RightPanel"],
+  [data-component="TopBar"],
+  .mari-modal-panel,
+  .os-window
+) [class*="group-active:scale"]:not(.mari-message-content *) {
+  transform: none !important;
+  scale: 1 !important;
+}
+
+/* ── Search input padding compensation ────────────────────────
+ * Our pixel-art magnifier swap takes more horizontal real estate
+ * inside its 16x16 viewBox than Lucide's narrow circle, so the
+ * placeholder text on inputs with tight `pl-3`/`pl-7` overlaps
+ * the icon (visible on Search characters / Search presets).
+ * Bump padding-left for any text input whose placeholder begins
+ * "Search " — covers the engine's search inputs without touching
+ * unrelated text fields. */
+input[type="text"][placeholder^="Search "],
+input[type="search"][placeholder^="Search "] {
+  padding-left: 2.25rem !important;
+}
+
 /* SVG `fill` attribute set via inline style — common on category
  * icons that the Tailwind class flatten above misses (some icons
  * carry the color on `style="color: #..."` directly rather than
@@ -1932,6 +2121,18 @@ svg[class*="lucide-help"] {
 [class*=" bg-[var(--primary)]"] {
   background-color: var(--win95-title-active-1) !important;
   background-image: none !important;
+  color: var(--win95-hilite) !important;
+}
+/* When `bg-[var(--primary)]/X` flags a row as selected (e.g. the
+ * Characters / Personas / Lorebooks panel selected entries), the
+ * navy-on-grey override above paints the bg, but descendant text
+ * rules still leave the title/subtitle as black — illegible
+ * against the navy. Force white on all descendants for any
+ * primary-bg container so the selection contrast matches the
+ * canonical Win95 selection look. */
+[class^="bg-[var(--primary)]"] *,
+[class*=" bg-[var(--primary)]"] * {
+  color: var(--win95-hilite) !important;
 }
 
 /* Tailwind gradient utilities (`bg-gradient-to-{br|tr|...}` paired
@@ -2336,6 +2537,33 @@ input[type="color"]::-moz-color-swatch {
   -webkit-background-clip: border-box !important;
   color: var(--win95-text) !important;
   animation: none !important;
+}
+
+/* ── Chat input bar (structural target) ──────────────────────
+ * Both `mari-chat-input-box` AND `mari-chat-input` /
+ * `chat-input-container` source classes are stripped from the
+ * rendered DOM (twMerge or build transform — confirmed via
+ * DevTools `getComputedStyle` returning null on those selectors,
+ * same gotcha as `mari-chat-send-btn` in v1). Target by
+ * structure instead: the chat input pill is uniquely identified
+ * as a div inside `.mari-chat-area` (or `.rpg-chat-area`) that
+ * carries both Tailwind `rounded-2xl` AND `bg-black/X` classes.
+ * No other element on the surface fits that signature. */
+.mari-chat-area div[class*="rounded-2xl"][class*="bg-black"],
+.rpg-chat-area div[class*="rounded-2xl"][class*="bg-black"],
+[data-component^="ChatArea"] div[class*="rounded-2xl"][class*="bg-black"] {
+  border-radius: 0 !important;
+  background: var(--win95-face) !important;
+  background-color: var(--win95-face) !important;
+  background-image: none !important;
+  border: 2px solid !important;
+  border-top-color: var(--win95-light) !important;
+  border-left-color: var(--win95-light) !important;
+  border-right-color: var(--win95-dark) !important;
+  border-bottom-color: var(--win95-dark) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--win95-hilite),
+    inset -1px -1px 0 var(--win95-shadow) !important;
 }
 
 /* ── Avatars (chunky-pixel, desaturated) ──────────────────────
