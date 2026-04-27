@@ -1199,6 +1199,36 @@ select {
   padding: 3px 4px;
 }
 
+/* Win95 combobox — strip the native dropdown arrow and paint a
+ * chunky 3D arrow-button on the right via inline-SVG background.
+ * Authentic combos had a ~16-px raised square button at the
+ * right edge with a black down-chevron in the middle. The SVG
+ * draws the bevel + chevron in one image; CSS positions it
+ * flush against the right edge and pads the field text
+ * accordingly so the value doesn't run under the arrow. */
+select {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  padding-right: 22px !important;
+  background-color: var(--win95-hilite) !important;
+  background-image:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' shape-rendering='crispEdges'><rect width='16' height='16' fill='%23c0c0c0'/><polyline points='0,15 0,0 15,0' stroke='%23ffffff' fill='none'/><polyline points='1,14 1,1 14,1' stroke='%23dfdfdf' fill='none'/><polyline points='15,0 15,15 0,15' stroke='%23404040' fill='none'/><polyline points='14,1 14,14 1,14' stroke='%23808080' fill='none'/><polygon points='5,7 11,7 8,10' fill='%23000000'/></svg>") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 2px center !important;
+  background-size: 16px 16px !important;
+}
+
+/* Some engine selects sit inside a `relative` wrapper that adds
+ * its own Lucide ChevronDown sibling for the arrow. With our
+ * appearance:none + background arrow, the sibling chevron now
+ * doubles up. Hide the sibling so only our arrow shows. */
+.relative > select + svg.lucide,
+.relative > select ~ svg.lucide,
+.relative:has(> select) > svg[class*="lucide-chevron"] {
+  display: none !important;
+}
+
 input:focus,
 textarea:focus,
 select:focus {
@@ -2311,22 +2341,51 @@ input[type="search"][placeholder^="Search "] {
   border-color: var(--win95-shadow) !important;
 }
 
-[class^="bg-[var(--primary)]"],
-[class*=" bg-[var(--primary)]"] {
+/* `bg-[var(--primary)]` shows up in three Win95-distinct
+ * contexts:
+ *   1. Selected list rows / badges (DIVs, NOT buttons) →
+ *      flat navy + white text. Canonical Win95 selection.
+ *   2. Action buttons ("Next ▶", "Use Settings Presets",
+ *      "Add" — solid `bg-[var(--primary)]` on a <button>)
+ *      → standard grey raised Win95 button. NOT navy fills,
+ *      which read as flat post-XP web design.
+ *   3. Selected segmented-control toggles ("Conversations" in
+ *      Send-on-Enter — `bg-[var(--primary)]/X` opacity variant
+ *      on a <button>) → grey with pressed-in bevel as the
+ *      "this is the active option" cue.
+ * Differentiator: solid vs `/X` opacity in the class name; plus
+ * <button> vs non-button element type. */
+
+/* Case 1: non-button → flat navy + white text + descendants. */
+:not(button)[class^="bg-[var(--primary)]"],
+:not(button)[class*=" bg-[var(--primary)]"] {
   background-color: var(--win95-title-active-1) !important;
   background-image: none !important;
   color: var(--win95-hilite) !important;
 }
+:not(button)[class^="bg-[var(--primary)]"] *,
+:not(button)[class*=" bg-[var(--primary)]"] * {
+  color: var(--win95-hilite) !important;
+}
 
-/* When the primary-bg utility is on a <button> (e.g. the active
- * pill in the Roleplay/Conversations/Game segmented control,
- * Send-on-Enter mode toggles, etc), give it the canonical Win95
- * pressed-in bevel — dark top/left, light bottom/right, inset
- * shadow — so users recognize it as a pressed/selected button
- * rather than a flat blue tab. Inactive buttons in the same
- * group keep their raised bevel from the global button rule. */
-button[class^="bg-[var(--primary)]"],
-button[class*=" bg-[var(--primary)]"] {
+/* Case 2: solid bg-primary on a <button> → grey raised. The
+ * `:not([class*="bg-[var(--primary)]/"])` carve-out excludes
+ * the opacity variants which we handle as case 3. The global
+ * button rule provides the raised bevel; we only need to
+ * defeat the navy bg + white text. */
+button[class^="bg-[var(--primary)]"]:not([class*="bg-[var(--primary)]/"]),
+button[class*=" bg-[var(--primary)]"]:not([class*="bg-[var(--primary)]/"]) {
+  background-color: var(--win95-face) !important;
+  background-image: none !important;
+  color: var(--win95-text) !important;
+}
+
+/* Case 3: bg-primary/X on a <button> → grey + pressed bevel. */
+button[class^="bg-[var(--primary)]/"],
+button[class*=" bg-[var(--primary)]/"] {
+  background-color: var(--win95-face) !important;
+  background-image: none !important;
+  color: var(--win95-text) !important;
   border: 2px solid !important;
   border-top-color: var(--win95-dark) !important;
   border-left-color: var(--win95-dark) !important;
@@ -2335,17 +2394,6 @@ button[class*=" bg-[var(--primary)]"] {
   box-shadow:
     inset 1px 1px 0 var(--win95-shadow),
     inset -1px -1px 0 var(--win95-hilite) !important;
-}
-/* When `bg-[var(--primary)]/X` flags a row as selected (e.g. the
- * Characters / Personas / Lorebooks panel selected entries), the
- * navy-on-grey override above paints the bg, but descendant text
- * rules still leave the title/subtitle as black — illegible
- * against the navy. Force white on all descendants for any
- * primary-bg container so the selection contrast matches the
- * canonical Win95 selection look. */
-[class^="bg-[var(--primary)]"] *,
-[class*=" bg-[var(--primary)]"] * {
-  color: var(--win95-hilite) !important;
 }
 
 /* Tailwind gradient utilities (`bg-gradient-to-{br|tr|...}` paired
