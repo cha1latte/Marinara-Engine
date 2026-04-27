@@ -2317,6 +2317,25 @@ input[type="search"][placeholder^="Search "] {
   background-image: none !important;
   color: var(--win95-hilite) !important;
 }
+
+/* When the primary-bg utility is on a <button> (e.g. the active
+ * pill in the Roleplay/Conversations/Game segmented control,
+ * Send-on-Enter mode toggles, etc), give it the canonical Win95
+ * pressed-in bevel — dark top/left, light bottom/right, inset
+ * shadow — so users recognize it as a pressed/selected button
+ * rather than a flat blue tab. Inactive buttons in the same
+ * group keep their raised bevel from the global button rule. */
+button[class^="bg-[var(--primary)]"],
+button[class*=" bg-[var(--primary)]"] {
+  border: 2px solid !important;
+  border-top-color: var(--win95-dark) !important;
+  border-left-color: var(--win95-dark) !important;
+  border-right-color: var(--win95-light) !important;
+  border-bottom-color: var(--win95-light) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--win95-shadow),
+    inset -1px -1px 0 var(--win95-hilite) !important;
+}
 /* When `bg-[var(--primary)]/X` flags a row as selected (e.g. the
  * Characters / Personas / Lorebooks panel selected entries), the
  * navy-on-grey override above paints the bg, but descendant text
@@ -2467,20 +2486,32 @@ input[type="range"]::-moz-range-track {
   border-bottom-color: var(--win95-hilite);
 }
 
+/* Win95 trackbar thumb — pentagon (rectangular top + downward
+ * notch) with a single-pixel light bevel on top-left and dark
+ * bevel on right + bottom-right diagonal. Built as inline SVG
+ * data URI so we get pixel-perfect shape control without
+ * fighting clip-path / box-shadow interactions (clip-path
+ * clips the box including any bevel borders, which is why we
+ * dodge it). The native `border` + `box-shadow` are zeroed out
+ * since the SVG renders the entire visual.
+ *
+ * Authentic Win95 trackbar thumbs were ~11×22 px; we run 12×22
+ * so the SVG has clean integer pixel boundaries.
+ *
+ * URL note: `#` colors inside the SVG must be encoded as `%23`
+ * because CSS data URIs treat # as a fragment marker. Single
+ * quotes around SVG attributes avoid escaping the surrounding
+ * double-quote URL. */
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   width: 12px;
   height: 22px;
-  background: var(--win95-face);
-  border: 2px solid;
-  border-top-color: var(--win95-light);
-  border-left-color: var(--win95-light);
-  border-right-color: var(--win95-dark);
-  border-bottom-color: var(--win95-dark);
-  box-shadow:
-    inset 1px 1px 0 var(--win95-hilite),
-    inset -1px -1px 0 var(--win95-shadow);
+  background:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='22' viewBox='0 0 12 22' shape-rendering='crispEdges'><polygon points='0,0 12,0 12,15 6,21 0,15' fill='%23c0c0c0'/><polyline points='0,15 0,0 12,0' stroke='%23ffffff' stroke-width='1' fill='none'/><polyline points='1,14 1,1 11,1' stroke='%23dfdfdf' stroke-width='1' fill='none'/><polyline points='11,0 11,15 6,20' stroke='%23404040' stroke-width='1' fill='none'/><polyline points='10,1 10,15 6,19' stroke='%23808080' stroke-width='1' fill='none'/></svg>")
+    center / contain no-repeat;
+  border: 0 !important;
+  box-shadow: none !important;
   border-radius: 0;
   cursor: default;
   margin-top: -10px;
@@ -2489,15 +2520,11 @@ input[type="range"]::-webkit-slider-thumb {
 input[type="range"]::-moz-range-thumb {
   width: 12px;
   height: 22px;
-  background: var(--win95-face);
-  border: 2px solid;
-  border-top-color: var(--win95-light);
-  border-left-color: var(--win95-light);
-  border-right-color: var(--win95-dark);
-  border-bottom-color: var(--win95-dark);
-  box-shadow:
-    inset 1px 1px 0 var(--win95-hilite),
-    inset -1px -1px 0 var(--win95-shadow);
+  background:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='22' viewBox='0 0 12 22' shape-rendering='crispEdges'><polygon points='0,0 12,0 12,15 6,21 0,15' fill='%23c0c0c0'/><polyline points='0,15 0,0 12,0' stroke='%23ffffff' stroke-width='1' fill='none'/><polyline points='1,14 1,1 11,1' stroke='%23dfdfdf' stroke-width='1' fill='none'/><polyline points='11,0 11,15 6,20' stroke='%23404040' stroke-width='1' fill='none'/><polyline points='10,1 10,15 6,19' stroke='%23808080' stroke-width='1' fill='none'/></svg>")
+    center / contain no-repeat;
+  border: 0 !important;
+  box-shadow: none !important;
   border-radius: 0;
   cursor: default;
 }
