@@ -1283,16 +1283,26 @@ input[type="radio"]:checked::after {
 }
 
 /* ── Scrollbars (webkit-only — Firefox keeps native) ─────────────── */
-/* CRITICAL: do NOT set `scrollbar-color` on `*` here. Chrome
- * detects the modern `scrollbar-color` property and switches to
- * NATIVE OS scrollbar rendering (which is rounded on modern
- * Chrome/Edge), silently ignoring every `::-webkit-scrollbar-*`
- * pseudo rule below. The chunky Win95 bevel only works when
- * pseudo-element rendering is in play.
+/* CRITICAL: the engine's globals.css sets `* { scrollbar-color:
+ * var(--y2k-pink) transparent }` which makes Chrome switch to
+ * NATIVE OS scrollbar rendering (rounded thumb in pink) and
+ * silently ignore every `::-webkit-scrollbar-*` pseudo rule.
+ * That's why earlier scrollbar fixes appeared to work in cascade
+ * inspectors but visually still showed pink: pseudos were never
+ * being rendered.
  *
- * Firefox doesn't support `::-webkit-scrollbar` and relies on
- * `scrollbar-color`; targeting only Firefox via @supports keeps
- * Win95 colors there without breaking Chrome's pseudo styling. */
+ * Fix: in Chrome (i.e. browsers that DON'T support -moz-appearance,
+ * which is Firefox-prefixed), force `scrollbar-color: auto` so
+ * Chrome falls back to pseudo-element rendering where our
+ * Win95 chunky bevel rules can win. In Firefox (which DOES
+ * support -moz-appearance, and doesn't support webkit pseudos
+ * anyway), set the Win95 face+shadow colors directly. */
+@supports not (-moz-appearance: none) {
+  * {
+    scrollbar-color: auto !important;
+    scrollbar-width: auto !important;
+  }
+}
 @supports (-moz-appearance: none) {
   * {
     scrollbar-width: auto;
