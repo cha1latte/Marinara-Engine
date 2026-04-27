@@ -1898,6 +1898,52 @@ svg[class*="lucide-help"] {
   background-image: none !important;
 }
 
+/* ── Unscoped avatar squaring + glow defeat ───────────────────
+ * The earlier scoped pixelation only catches ChatSidebar +
+ * ChatArea avatars. CharacterEditor / LorebookEditor / Persona
+ * editor mount in their own surfaces and re-show round avatars
+ * with `box-shadow: 0 0 ...` glows. Square + de-glow any
+ * `<img>` whose parent context applies `rounded-{full,2xl,xl}`
+ * — covers all editors, modals, panels uniformly.
+ *
+ * Note: explicitly NOT scoping to chrome data-components so
+ * editor surfaces inherit the same treatment. Carve-out only
+ * for chat-content images so user-uploaded inline images keep
+ * the engine's intended display. */
+img[class*="rounded-full"]:not(.mari-message-content img),
+img[class*="rounded-2xl"]:not(.mari-message-content img),
+img[class*="rounded-xl"]:not(.mari-message-content img) {
+  border-radius: 0 !important;
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  filter: saturate(0.6) contrast(1.1);
+  box-shadow: none !important;
+}
+
+/* Avatar parent containers — engine wraps `<img>` in
+ * `<div class="rounded-full ... shadow-... ring-...">` to apply
+ * the round mask + glow. Square the wrapper too and kill any
+ * shadow/ring that would render around the squared photo. */
+div[class*="rounded-full"]:not(.mari-message-content *):not(.win95-skip):has(> img),
+div[class*="rounded-full"]:not(.mari-message-content *):not(.win95-skip):has(> div[class*="rounded-full"]) {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  --tw-shadow: 0 0 #0000 !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  --tw-ring-color: transparent !important;
+}
+
+/* ── Inline-style color flatten (character name preview etc) ──
+ * The engine's character editor renders name/dialogue color
+ * previews via `style={{ color: character.nameColor }}` — defaults
+ * to a pink/rose hex that bleeds through our class-based color
+ * flatten. Force inline-style color to win95-text on any element
+ * that's not chat content. Also covers stray `style="background:
+ * #..."` swatches outside the explicit gradient defeat. */
+[style*="color:"]:not(.mari-message-content *):not(.mari-message-bubble *):not(svg):not([style*="background"]) {
+  color: var(--win95-text) !important;
+}
+
 /* ── Chat surface background reset ───────────────────────────
  * Engine often layers `bg-[var(--background)]/X` or similar
  * semi-transparent tints on the chat surface that read as a
