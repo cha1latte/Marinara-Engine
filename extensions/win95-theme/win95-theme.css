@@ -272,6 +272,81 @@
   padding-bottom: 24px;
 }
 
+/* ── Titlebar-button state classes (min / max / closed) ───────
+ * Click `_` `□` `×` in any wrapped surface's titlebar — the
+ * state machine in win95-theme.js sets one of these classes on
+ * the surface and (for `max`) a body-level class. CSS does the
+ * actual visual collapse/hide. Restore = click the same button
+ * again, or use "Restore all windows" in the win95 settings
+ * panel as the safety net. */
+
+/* Minimize: collapse the surface to titlebar height; hide every
+ * direct child except the titlebar (statusbar included — there's
+ * no room for it at 26px tall). */
+.win95-window.win95-state-min {
+  flex: 0 0 26px !important;
+  min-height: 26px !important;
+  max-height: 26px !important;
+  height: 26px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+.win95-window.win95-state-min > *:not([data-win95-chrome="titlebar"]) {
+  display: none !important;
+}
+.win95-window.win95-state-min > [data-win95-chrome="titlebar"] {
+  position: relative !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+}
+
+/* Close: same collapse as min, but the titlebar gets the
+ * inactive (grey) gradient as a visual cue that the surface is
+ * "closed". Click `×` again to restore. */
+.win95-window.win95-state-closed {
+  flex: 0 0 22px !important;
+  min-height: 22px !important;
+  max-height: 22px !important;
+  height: 22px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+.win95-window.win95-state-closed > *:not([data-win95-chrome="titlebar"]) {
+  display: none !important;
+}
+.win95-window.win95-state-closed > [data-win95-chrome="titlebar"] {
+  position: relative !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  background: linear-gradient(
+    to right,
+    var(--win95-title-inactive-1) 0%,
+    var(--win95-title-inactive-2) 100%
+  ) !important;
+}
+
+/* Maximize: hide the sidebar + right-panel siblings via a body
+ * class so the chat surface naturally claims the freed space.
+ * Selectors target the AppShell wrapper data-components rather
+ * than ChatSidebar directly so the user's whole sidebar column
+ * disappears (avatar list and all). The ChatArea container
+ * itself doesn't need any rule — it'll flex-fill the row. */
+body.win95-chat-max [data-component="ChatSidebarPanel"],
+body.win95-chat-max [data-component="RightPanelDesktop"],
+body.win95-chat-max [data-component="RightPanelMobile"] {
+  display: none !important;
+}
+
+/* The sidebar's `□` (max) is a no-op — fade the button so users
+ * see the action isn't available. The click handler also
+ * early-returns for sidebar+max so the state never persists. */
+[data-component="ChatSidebar"] > [data-win95-chrome="titlebar"] [data-act="max"] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* The inner `.mari-chat-area` div carries an inline-style linear
  * gradient from the user's "Conversation theme" setting in Settings →
  * Appearance. Inline styles win over class CSS, so we need !important
