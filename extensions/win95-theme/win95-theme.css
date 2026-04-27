@@ -2338,6 +2338,55 @@ input[type="color"]::-moz-color-swatch {
   animation: none !important;
 }
 
+/* ── Avatars (chunky-pixel, desaturated) ──────────────────────
+ * Engine renders chat-list and message avatars as smooth-scaled
+ * round photos with a green presence dot — pure 2024 messaging
+ * convention. Win95 had 16-color bitmap icons with hard pixel
+ * edges. We can't replace user-uploaded thumbnails, but we can
+ * push them visually toward "looks chunky and 16-color" with:
+ *   - `image-rendering: pixelated` so the browser nearest-
+ *     neighbor scales instead of bilinear-smoothing
+ *   - `border-radius: 0` so the frame is square (the engine
+ *     uses `rounded-full`)
+ *   - `filter: saturate(0.6) contrast(1.1)` to dial back the
+ *     vivid HD photo look
+ * Scoped to chat-list and message rows; uploaded images inside
+ * message content stay user-styled.
+ *
+ * Selector hits the engine's `<img className="...rounded-full
+ * object-cover">` avatar pattern — both single-character and
+ * stacked group avatars. */
+:where(
+  [data-component="ChatSidebar"],
+  [data-component^="ChatArea"]
+) img[class*="rounded-full"]:not(.mari-message-content img),
+:where(
+  [data-component="ChatSidebar"],
+  [data-component^="ChatArea"]
+) img[class*="rounded-md"]:not(.mari-message-content img),
+:where(
+  [data-component="ChatSidebar"],
+  [data-component^="ChatArea"]
+) .mari-message-avatar img {
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  border-radius: 0 !important;
+  filter: saturate(0.6) contrast(1.1);
+}
+
+/* The avatar's parent container is also `rounded-full` (sets the
+ * clip), so square the parent too. */
+:where(
+  [data-component="ChatSidebar"],
+  [data-component^="ChatArea"]
+) div[class*="rounded-full"]:not(.mari-message-content *):has(> img),
+:where(
+  [data-component="ChatSidebar"],
+  [data-component^="ChatArea"]
+) div[class*="rounded-full"]:not(.mari-message-content *):has(> div[class*="rounded-full"]) {
+  border-radius: 0 !important;
+}
+
 /* ── Hyperlinks ───────────────────────────────────────────────
  * Win95 classic links — `#0000ee` solid blue with underline,
  * `#551a8b` purple after visit. Engine renders home-page links
