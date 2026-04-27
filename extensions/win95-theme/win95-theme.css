@@ -2698,6 +2698,125 @@ input[type="color"]::-moz-color-swatch {
   -webkit-text-fill-color: #551a8b !important;
 }
 
+/* ── Boot splash (Win95-style "Starting Marinara…" splash) ───────
+ * Full-viewport black overlay shown once per browser session
+ * (sessionStorage gated). Auto-dismisses after ~2.6 seconds or
+ * on first click. JS in win95-theme.js builds the DOM; CSS owns
+ * everything visual. The four-color flag is a 2×2 grid (red /
+ * green / blue / yellow) — close-enough nod to the Win95 flag
+ * without going through the perspective trapezoid contortions
+ * the real boot screen used. */
+.win95-boot-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 999999;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-family: var(--font-y2k);
+  color: var(--win95-hilite);
+  /* Skip the chrome animation defeat — the splash needs its
+   * progress-bar fill animation to actually run. */
+  animation: win95-boot-fade-in 200ms ease-out;
+}
+
+@keyframes win95-boot-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.win95-boot-content {
+  text-align: center;
+  max-width: 80vw;
+  user-select: none;
+}
+
+.win95-boot-flag {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 4px;
+  width: 84px;
+  height: 84px;
+  margin: 0 auto 28px;
+}
+.win95-boot-flag > div {
+  border: 1px solid rgba(0, 0, 0, 0.5);
+}
+.win95-boot-flag > div:nth-child(1) { background: #e23030; }
+.win95-boot-flag > div:nth-child(2) { background: #2db835; }
+.win95-boot-flag > div:nth-child(3) { background: #2858d0; }
+.win95-boot-flag > div:nth-child(4) { background: #ecc828; }
+
+.win95-boot-title {
+  font-size: 36px;
+  font-weight: bold;
+  letter-spacing: 4px;
+  margin-bottom: 6px;
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.7);
+  font-family: var(--font-y2k);
+}
+
+.win95-boot-tagline {
+  font-size: 12px;
+  letter-spacing: 2px;
+  opacity: 0.65;
+  margin-bottom: 24px;
+  font-family: var(--font-y2k);
+}
+
+.win95-boot-status {
+  font-size: 13px;
+  margin: 22px 0 14px;
+  letter-spacing: 1px;
+}
+
+/* Sunken progress trough + segmented blue fill. The
+ * repeating-linear-gradient draws the 12-px navy slabs separated
+ * by 2-px gaps — Win95 progress bars rendered as discrete
+ * vertical blocks rather than a smooth fill. */
+.win95-boot-bar {
+  width: 280px;
+  height: 18px;
+  margin: 14px auto 26px;
+  background: var(--win95-shadow);
+  padding: 2px;
+  border: 2px solid;
+  border-top-color: var(--win95-dark);
+  border-left-color: var(--win95-dark);
+  border-right-color: var(--win95-light);
+  border-bottom-color: var(--win95-light);
+  box-sizing: border-box;
+}
+
+.win95-boot-bar-fill {
+  height: 100%;
+  width: 0;
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--win95-title-active-1) 0,
+    var(--win95-title-active-1) 12px,
+    transparent 12px,
+    transparent 14px
+  );
+  animation: win95-boot-fill 2.4s linear forwards;
+}
+
+@keyframes win95-boot-fill {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+.win95-boot-hint {
+  font-size: 11px;
+  opacity: 0.55;
+  margin-top: 22px;
+  letter-spacing: 1px;
+  font-family: var(--font-y2k);
+}
+
 /* ── Settings panel (own UI — Ctrl+Shift+9 / #win95) ─────────────── */
 .win95-settings {
   position: fixed;
