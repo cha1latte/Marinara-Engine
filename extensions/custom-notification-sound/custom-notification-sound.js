@@ -10,11 +10,15 @@
   // suppressed, and our user-uploaded sample is played in its place via a
   // transient <audio> element. The 880 Hz oscillator is the trigger; the
   // 1320 Hz shimmer is suppressed silently so only one custom sound fires
-  // per ping. If the extension is disabled or no sound has been uploaded,
-  // the patch falls through to the original implementation, so the default
-  // ping plays unchanged.
+  // per ping. If no sound has been uploaded, the patch falls through to the
+  // original implementation, so the default ping plays unchanged. The
+  // extension card's own on/off handles enable/disable globally — turning
+  // the extension off triggers cleanup, which restores the prototype.
+  //
+  // Settings UI: a bell icon is injected into this extension's card in
+  // Settings → Extensions; clicking it opens a popover anchored to the
+  // icon (pattern adapted from Decidetto's Accent Color Changer extension).
 
-  var KEY_ENABLED = "marinara-cns-enabled";
   var KEY_SOUND = "marinara-cns-sound";
   var KEY_NAME = "marinara-cns-name";
   var KEY_VOLUME = "marinara-cns-volume";
@@ -23,14 +27,21 @@
   var PING_FREQS = [880, 1320];
   var DEDUPE_MS = 100;
 
-  var lastPlayed = 0;
-  var panel = null;
-  var panelLoad = null;
+  var EXTENSION_NAME = marinara.extensionName || "Custom Notification Sound";
+  var TOGGLE_ID = "cns-toggle-" + (marinara.extensionId || "x");
 
-  function readEnabled() {
-    var v = localStorage.getItem(KEY_ENABLED);
-    return v === null ? true : v === "true";
-  }
+  // Lucide bell icon (https://lucide.dev/icons/bell)
+  var BELL_ICON_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="0.875rem" height="0.875rem" ' +
+    'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path>' +
+    '<path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path>' +
+    "</svg>";
+
+  var lastPlayed = 0;
+  var popover = null;
+
   function readSound() { return localStorage.getItem(KEY_SOUND) || ""; }
   function readName() { return localStorage.getItem(KEY_NAME) || ""; }
   function readVolume() {
@@ -69,7 +80,7 @@
       } catch (e) { /* leave detection disabled for this osc */ }
       var origStart = osc.start;
       osc.start = function () {
-        if (PING_FREQS.indexOf(lastFreq) !== -1 && readEnabled() && readSound()) {
+        if (PING_FREQS.indexOf(lastFreq) !== -1 && readSound()) {
           if (lastFreq === 880) playCustomSound();
           return; // suppress the procedural oscillator
         }
@@ -98,13 +109,31 @@
     reader.readAsDataURL(file);
   }
 
-  function buildPanel() {
-    if (panel) return;
-    panel = marinara.addElement("body", "div", { class: "cns-panel is-hidden" });
-    if (!panel) return;
-    panel.innerHTML =
+  function closePopover() {
+    document.removeEventListener("mousedown", outsideClickHandler);
+    if (popover) {
+      popover.remove();
+      popover = null;
+    }
+  }
+
+  function outsideClickHandler(e) {
+    if (!popover) return;
+    if (popover.contains(e.target)) return;
+    if (e.target.closest && e.target.closest(".cns-toggle")) return;
+    closePopover();
+  }
+
+  function openPopover(anchor) {
+    if (popover) {
+      closePopover();
+      return;
+    }
+
+    popover = document.createElement("div");
+    popover.className = "cns-popover";
+    popover.innerHTML =
       '<h3>Custom Notification Sound</h3>' +
-      '<label class="cns-checkbox-row"><input type="checkbox" data-cns-field="enabled"> <span>Enabled</span></label>' +
       '<div class="cns-stack">' +
         '<span class="cns-label-text">Sound file</span>' +
         '<div class="cns-file-row">' +
@@ -112,21 +141,28 @@
             '<input type="file" accept="audio/*" data-cns-field="file">' +
             '<span>Upload audio…</span>' +
           '</label>' +
-          '<button data-cns-action="test" type="button">Test</button>' +
+          '<button class="cns-action" data-cns-act="test" type="button">Test</button>' +
         '</div>' +
-        '<p class="cns-current" data-cns-display="current">No sound uploaded.</p>' +
+        '<p class="cns-current" data-cns-display="current"></p>' +
       '</div>' +
-      '<label><span class="cns-label-text">Volume: <span data-cns-display="volume"></span></span>' +
-      '<input type="range" data-cns-field="volume" min="0" max="1" step="0.01"></label>' +
-      '<div class="cns-row">' +
-        '<button data-cns-action="clear" type="button">Clear sound</button>' +
-        '<button data-cns-action="close" type="button">Close</button>' +
-      '</div>' +
-      '<p class="cns-help">Press Ctrl+Shift+M anytime to reopen this panel. ' +
-        'Files are stored in your browser; keep them under ~1 MB.</p>';
+      '<label class="cns-volume">' +
+        '<span class="cns-label-text">Volume: <span data-cns-display="volume"></span></span>' +
+        '<input type="range" data-cns-field="volume" min="0" max="1" step="0.01">' +
+      '</label>' +
+      '<div class="cns-actions">' +
+        '<button class="cns-action" data-cns-act="clear" type="button">Clear sound</button>' +
+        '<button class="cns-action" data-cns-act="close" type="button">Close</button>' +
+      '</div>';
 
-    var qs = function (sel) { return panel.querySelector(sel); };
-    var enabledEl = qs('[data-cns-field="enabled"]');
+    document.body.appendChild(popover);
+
+    var rect = anchor.getBoundingClientRect();
+    var top = Math.min(rect.bottom + 6, window.innerHeight - popover.offsetHeight - 8);
+    var left = Math.max(8, Math.min(rect.left, window.innerWidth - popover.offsetWidth - 8));
+    popover.style.top = top + "px";
+    popover.style.left = left + "px";
+
+    var qs = function (sel) { return popover.querySelector(sel); };
     var fileEl = qs('[data-cns-field="file"]');
     var volumeEl = qs('[data-cns-field="volume"]');
     var volumeDisp = qs('[data-cns-display="volume"]');
@@ -139,20 +175,15 @@
         ? "Loaded: " + (name || "custom sound")
         : "No sound uploaded.";
     }
-    panelLoad = function () {
-      enabledEl.checked = readEnabled();
-      volumeEl.value = readVolume();
-      refreshDisplays();
-    };
 
-    marinara.on(enabledEl, "change", function () {
-      localStorage.setItem(KEY_ENABLED, enabledEl.checked ? "true" : "false");
-    });
-    marinara.on(volumeEl, "input", function () {
+    volumeEl.value = readVolume();
+    refreshDisplays();
+
+    volumeEl.addEventListener("input", function () {
       localStorage.setItem(KEY_VOLUME, volumeEl.value);
       refreshDisplays();
     });
-    marinara.on(fileEl, "change", function () {
+    fileEl.addEventListener("change", function () {
       var file = fileEl.files && fileEl.files[0];
       if (!file) return;
       readFileAsDataUrl(file, function (err, dataUrl) {
@@ -170,61 +201,53 @@
         }
       });
     });
-    marinara.on(qs('[data-cns-action="test"]'), "click", function () {
+    qs('[data-cns-act="test"]').addEventListener("click", function () {
       lastPlayed = 0;
       playCustomSound();
     });
-    marinara.on(qs('[data-cns-action="clear"]'), "click", function () {
+    qs('[data-cns-act="clear"]').addEventListener("click", function () {
       localStorage.removeItem(KEY_SOUND);
       localStorage.removeItem(KEY_NAME);
       refreshDisplays();
     });
-    marinara.on(qs('[data-cns-action="close"]'), "click", hidePanel);
+    qs('[data-cns-act="close"]').addEventListener("click", closePopover);
+
+    setTimeout(function () {
+      document.addEventListener("mousedown", outsideClickHandler);
+    }, 0);
   }
 
-  function showPanel() {
-    if (!panel) buildPanel();
-    if (!panel || !panelLoad) return;
-    panelLoad();
-    panel.classList.remove("is-hidden");
-  }
-  function hidePanel() { if (panel) panel.classList.add("is-hidden"); }
-  function togglePanel() {
-    if (!panel || panel.classList.contains("is-hidden")) showPanel();
-    else hidePanel();
-  }
-
-  function onKeydown(e) {
-    if (e.key === "Escape" && panel && !panel.classList.contains("is-hidden")) {
-      hidePanel();
+  function tryInjectToggle() {
+    if (document.getElementById(TOGGLE_ID)) return;
+    var candidates = document.querySelectorAll("span.font-medium.truncate");
+    for (var i = 0; i < candidates.length; i++) {
+      var span = candidates[i];
+      if (!span.textContent || span.textContent.trim() !== EXTENSION_NAME) continue;
+      var card = span.closest('[class*="rounded-lg"]');
+      if (!card) continue;
+      var trash = card.querySelector('button[title="Remove extension"]');
+      if (!trash) continue;
+      var toggle = document.createElement("button");
+      toggle.id = TOGGLE_ID;
+      toggle.className = "cns-toggle";
+      toggle.title = "Notification sound settings";
+      toggle.innerHTML = BELL_ICON_SVG;
+      toggle.addEventListener("click", function (e) {
+        e.stopPropagation();
+        openPopover(toggle);
+      });
+      card.insertBefore(toggle, trash);
       return;
     }
-    var key = e.key && e.key.toLowerCase();
-    if (key === "m" && e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey) {
-      e.preventDefault();
-      togglePanel();
-    }
   }
 
-  function checkHashTrigger() {
-    // Mobile-friendly opener: typing #cns into the address bar opens the
-    // panel. Clear the hash afterwards so the same hash can re-trigger on
-    // subsequent edits (hashchange only fires when the value changes).
-    if (location.hash === "#cns") {
-      try {
-        history.replaceState(null, "", location.pathname + location.search);
-      } catch (e) { /* fall through, the trigger still works */ }
-      showPanel();
-    }
-  }
+  marinara.setInterval(tryInjectToggle, 500);
+  tryInjectToggle();
 
-  marinara.on(window, "keydown", onKeydown);
-  marinara.on(window, "hashchange", checkHashTrigger);
   marinara.onCleanup(function () {
+    closePopover();
     unpatchAudioContext();
-    if (panel) panel.classList.add("is-hidden");
   });
 
   patchAudioContext();
-  checkHashTrigger();
 })();
