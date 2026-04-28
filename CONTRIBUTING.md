@@ -42,12 +42,12 @@ Copy `.env.example` to `.env` when you need to change ports, HTTPS settings, or 
 
 ## Repo Layout
 
-- `packages/client` — React frontend, PWA shell, and UI components
-- `packages/server` — Fastify API, SQLite integration, migrations, importers, and AI agents
-- `packages/shared` — Shared types, schemas, constants, and `APP_VERSION`
-- `android` — Android WebView wrapper for the Termux-served local app
+- `packages/client/` — React frontend, PWA shell, and UI components
+- `packages/server/` — Fastify API, SQLite integration, migrations, importers, and AI agents
+- `packages/shared/` — Shared types, schemas, constants, and `APP_VERSION`
+- `android/` — Android WebView wrapper for the Termux-served local app
 - `installer` — Windows installer sources and helper scripts
-- `docs/screenshots` — README and release media assets
+- `docs/` — docs and repo media assets
 - `start.bat`, `start.sh`, `start-termux.sh` — platform launchers
 
 ## Validation
