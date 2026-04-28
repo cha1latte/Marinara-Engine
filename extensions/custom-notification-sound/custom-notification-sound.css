@@ -1,0 +1,128 @@
+/* Custom Notification Sound — settings panel styling */
+
+.cns-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 99999;
+  width: 380px;
+  max-width: calc(100vw - 32px);
+  padding: 20px 24px;
+  background: rgba(20, 20, 22, 0.96);
+  color: #f0f0f0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.cns-panel.is-hidden {
+  display: none;
+}
+
+.cns-panel h3 {
+  margin: 0 0 16px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.cns-panel label {
+  display: block;
+  margin-bottom: 12px;
+}
+
+.cns-panel .cns-label-text {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+.cns-panel input[type="range"] {
+  width: 100%;
+}
+
+.cns-panel .cns-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.cns-panel .cns-checkbox-row input {
+  margin: 0;
+}
+
+.cns-panel .cns-stack {
+  margin-bottom: 14px;
+}
+
+.cns-panel .cns-file-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.cns-panel .cns-file-label {
+  flex: 1;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  text-align: center;
+}
+
+.cns-panel .cns-file-label:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.cns-panel .cns-file-label input[type="file"] {
+  display: none;
+}
+
+.cns-panel .cns-current {
+  margin: 8px 0 0;
+  font-size: 12px;
+  opacity: 0.7;
+  word-break: break-all;
+}
+
+.cns-panel .cns-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.cns-panel button {
+  flex: 1;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #f0f0f0;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.cns-panel button:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.cns-panel .cns-help {
+  margin: 14px 0 0;
+  font-size: 11px;
+  opacity: 0.6;
+  line-height: 1.5;
+}
