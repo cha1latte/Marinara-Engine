@@ -1,11 +1,11 @@
-name: PR Triage
+name: Pull Request Triage
 
 on:
   pull_request_target:
     types: [opened, reopened, edited, synchronize]
 
 concurrency:
-  group: pr-triage-${{ github.event.pull_request.number }}
+  group: pull-request-triage-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
@@ -20,6 +20,23 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            const labels = {
+              feature: { color: 'a2eeef', description: 'New feature or enhancement' },
+              bugfix:  { color: 'd73a4a', description: 'Bug fix' },
+            };
+
+            // Ensure the label exists with the right color; update it if it drifted.
+            async function ensureLabel(name) {
+              const opts = { owner: context.repo.owner, repo: context.repo.repo };
+              try {
+                await github.rest.issues.createLabel({ ...opts, name, ...labels[name] });
+              } catch (e) {
+                if (e.status === 422) {
+                  await github.rest.issues.updateLabel({ ...opts, name, ...labels[name] });
+                }
+              }
+            }
+
             const pr = context.payload.pull_request;
             const title = pr.title.toLowerCase();
             const branch = (pr.head.ref || '').toLowerCase();
@@ -30,6 +47,10 @@ jobs:
             }
             if (title.includes('[issue]') || title.includes('[bug]') || title.startsWith('fix') || branch.startsWith('fix/') || branch.startsWith('bugfix/')) {
               add.push('bugfix');
+            }
+
+            for (const name of add) {
+              await ensureLabel(name);
             }
 
             if (add.length) {
@@ -48,7 +69,7 @@ jobs:
           sync-labels: true
 
   template-check:
-    name: PR template compliance
+    name: Pull Request template check
     runs-on: ubuntu-latest
     if: >-
       github.event.pull_request.author_association != 'MEMBER' &&
@@ -58,7 +79,7 @@ jobs:
       contents: read
       pull-requests: read
     steps:
-      - name: Check PR body against template
+      - name: Check Pull Request body against template
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |
@@ -103,4 +124,4 @@ jobs:
             exit 1
           fi
 
-          echo "PR template checks passed."
+          echo "Pull Request template checks passed."
