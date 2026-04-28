@@ -22,6 +22,18 @@ import { logger } from "../../lib/logger.js";
 const FALLBACK_TOKEN_BUDGET = 60;
 /** How many primary keys to surface per catalog entry. */
 const KEYS_PER_ENTRY = 3;
+/**
+ * Maximum number of candidate entries the router will route over in a single
+ * call. Prevents context-window blowups on extremely large lorebooks (e.g. a
+ * 5,000-entry world bible would otherwise build a ~150k-token catalog and
+ * either overflow smaller models or burn an enormous amount of input tokens).
+ *
+ * 400 is conservative — at the default ~30 tokens per catalog row plus
+ * ~400 tokens of agent overhead, it stays comfortably under 13k input tokens
+ * even before the conversation context. Real-world lorebooks rarely approach
+ * this scale; when they do, the router truncates and logs a warning.
+ */
+const MAX_ROUTER_CANDIDATES = 400;
 
 /** Single catalog row the LLM sees for routing. */
 export interface CatalogItem {
@@ -153,7 +165,20 @@ export async function executeKnowledgeRouter(
     };
   }
 
-  const catalog = buildCatalog(entries);
+  // Cap candidates to protect against context-window blowups on huge lorebooks.
+  // The router still works on truncated input — it just sees the first N entries.
+  // A future enhancement could rank or paginate before truncating; for now the
+  // truncation is order-preserving (matches `listEntriesByLorebooks` order).
+  const candidates = entries.length > MAX_ROUTER_CANDIDATES ? entries.slice(0, MAX_ROUTER_CANDIDATES) : entries;
+  if (entries.length > MAX_ROUTER_CANDIDATES) {
+    logger.warn(
+      "[knowledge-router] catalog truncated to %d/%d entries (MAX_ROUTER_CANDIDATES)",
+      candidates.length,
+      entries.length,
+    );
+  }
+
+  const catalog = buildCatalog(candidates);
   const catalogText = formatCatalogForPrompt(catalog);
 
   const context: AgentContext = {
@@ -185,13 +210,15 @@ export async function executeKnowledgeRouter(
   const dedupedIds = [...new Set(selectedIds)];
 
   // Build the verbatim injection text from the entries the router picked.
-  const entriesById = new Map(entries.map((e) => [e.id, e]));
+  // Lookup is restricted to `candidates` (the truncated set the LLM actually saw)
+  // so a hallucinated id from outside that set can't slip through.
+  const entriesById = new Map(candidates.map((e) => [e.id, e]));
   const selectedEntries = dedupedIds
     .map((id) => entriesById.get(id))
     .filter((entry): entry is LorebookEntry => entry !== undefined);
 
   if (selectedEntries.length === 0) {
-    logger.debug("[knowledge-router] no entries selected from %d candidates", entries.length);
+    logger.debug("[knowledge-router] no entries selected from %d candidates", candidates.length);
     return {
       ...result,
       type: "context_injection",
@@ -206,7 +233,7 @@ export async function executeKnowledgeRouter(
   logger.debug(
     "[knowledge-router] selected %d/%d entries (%d ids returned, %d unique, %d unknown)",
     selectedEntries.length,
-    entries.length,
+    candidates.length,
     selectedIds.length,
     dedupedIds.length,
     dedupedIds.length - selectedEntries.length,
