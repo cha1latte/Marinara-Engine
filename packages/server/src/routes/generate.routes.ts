@@ -3403,22 +3403,36 @@ export async function generateRoutes(app: FastifyInstance) {
           const sourceIds = (knowledgeRouterAgent.settings.sourceLorebookIds as string[]) ?? [];
           if (sourceIds.length > 0) {
             const entries = await lorebooksStore.listEntriesByLorebooks(sourceIds);
-            // Honor per-chat entry state overrides (a user can disable a specific
-            // entry for this chat without touching the global lorebook). Without this
-            // the router could route over an entry the user explicitly silenced.
+            // Honor per-chat entry state overrides — a user can disable an entry for
+            // this chat without touching the global lorebook, and ephemeral entries
+            // carry per-chat countdown state. Mirrors the projection the standard
+            // lorebook activation pipeline does in services/lorebook/index.ts.
             const entryStateOverrides =
-              (chatMeta.entryStateOverrides as Record<string, { enabled?: boolean }>) ?? {};
-            // Skip disabled entries (off-limits) and constant entries (already injected
-            // unconditionally by the standard activation pipeline — routing them
-            // would duplicate work).
-            knowledgeRouterEntries = entries.filter(
+              (chatMeta.entryStateOverrides as Record<string, { enabled?: boolean; ephemeral?: number | null }>) ?? {};
+            // Skip:
+            //   - Disabled entries (off-limits, by global flag or per-chat override).
+            //   - Constant entries (already injected unconditionally by the standard
+            //     activation pipeline — routing them would duplicate work).
+            //   - Exhausted ephemeral entries (countdown reached 0 in this chat).
+            knowledgeRouterEntries = entries
+              .filter(
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (e: any) => {
+                  const ov = entryStateOverrides[e.id];
+                  const isEnabled = ov?.enabled ?? e.enabled !== false;
+                  if (!isEnabled || e.constant === true) return false;
+                  // Project the ephemeral override here so the exhaustion check uses
+                  // the per-chat remaining count, not the stale global default.
+                  const effectiveEphemeral = ov?.ephemeral !== undefined ? ov.ephemeral : e.ephemeral;
+                  if (effectiveEphemeral === 0) return false;
+                  return true;
+                },
+              )
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              (e: any) => {
-                const overrideEnabled = entryStateOverrides[e.id]?.enabled;
-                const isEnabled = overrideEnabled ?? e.enabled !== false;
-                return isEnabled && e.constant !== true;
-              },
-            );
+              .map((e: any) => {
+                const ov = entryStateOverrides[e.id];
+                return ov?.ephemeral !== undefined ? { ...e, ephemeral: ov.ephemeral } : e;
+              });
           }
         } catch {
           /* non-critical */
@@ -3971,32 +3985,40 @@ export async function generateRoutes(app: FastifyInstance) {
           : Promise.resolve([] as AgentInjection[]);
 
         // Build the knowledge retrieval promise
+        // Wrapped in try/catch so a KR failure (LLM error, parse error, etc.) never
+        // aborts the whole generation — knowledge retrieval is an optional enhancement,
+        // not a critical dependency. (Same pattern as the router promise below.)
         const krPromise = shouldRunKR
           ? (async () => {
-              reply.raw.write(
-                `data: ${JSON.stringify({ type: "agent_start", data: { phase: "pre_generation", agentType: "knowledge-retrieval" } })}\n\n`,
-              );
-              const krConfig = {
-                id: knowledgeRetrievalAgent!.id,
-                type: knowledgeRetrievalAgent!.type,
-                name: knowledgeRetrievalAgent!.name,
-                phase: knowledgeRetrievalAgent!.phase,
-                promptTemplate: knowledgeRetrievalAgent!.promptTemplate,
-                connectionId: knowledgeRetrievalAgent!.connectionId,
-                settings: knowledgeRetrievalAgent!.settings,
-              };
-              const sourceMaterial = agentContext.memory._knowledgeRetrievalMaterial as string;
               const _tKR = Date.now();
-              const krResult = await executeKnowledgeRetrieval(
-                krConfig,
-                agentContext,
-                knowledgeRetrievalAgent!.provider,
-                knowledgeRetrievalAgent!.model,
-                sourceMaterial,
-              );
-              sendAgentEvent(krResult);
-              logger.debug(`[timing] Knowledge retrieval: ${Date.now() - _tKR}ms`);
-              return krResult;
+              try {
+                reply.raw.write(
+                  `data: ${JSON.stringify({ type: "agent_start", data: { phase: "pre_generation", agentType: "knowledge-retrieval" } })}\n\n`,
+                );
+                const krConfig = {
+                  id: knowledgeRetrievalAgent!.id,
+                  type: knowledgeRetrievalAgent!.type,
+                  name: knowledgeRetrievalAgent!.name,
+                  phase: knowledgeRetrievalAgent!.phase,
+                  promptTemplate: knowledgeRetrievalAgent!.promptTemplate,
+                  connectionId: knowledgeRetrievalAgent!.connectionId,
+                  settings: knowledgeRetrievalAgent!.settings,
+                };
+                const sourceMaterial = agentContext.memory._knowledgeRetrievalMaterial as string;
+                const krResult = await executeKnowledgeRetrieval(
+                  krConfig,
+                  agentContext,
+                  knowledgeRetrievalAgent!.provider,
+                  knowledgeRetrievalAgent!.model,
+                  sourceMaterial,
+                );
+                sendAgentEvent(krResult);
+                logger.debug(`[timing] Knowledge retrieval: ${Date.now() - _tKR}ms`);
+                return krResult;
+              } catch (err) {
+                logger.warn(err, "[knowledge-retrieval] failed — continuing generation without retrieved context");
+                return null;
+              }
             })()
           : Promise.resolve(null);
 
@@ -4227,9 +4249,42 @@ export async function generateRoutes(app: FastifyInstance) {
           }
         }
 
-        if (contextInjections.length > 0) {
-          const wrapped = formatAgentInjections(contextInjections, wrapFormat);
+        // Split cached injections by injection placement, mirroring the fresh-generation path:
+        //   - Pipeline agents (prose-guardian, director, etc.) inject at depth 0 as system context.
+        //   - Separate-injection agents (knowledge-retrieval, knowledge-router) append to the
+        //     last user message wrapped in their own tags.
+        // Without this split, KR/Router cached output would be replayed in the wrong prompt
+        // position with different wrapping than the original generation, subtly changing the
+        // model's behavior on regenerate/swipe.
+        const cachedPipelineInjections = contextInjections.filter(
+          (inj) => !SEPARATE_INJECTION_AGENTS.has(inj.agentType),
+        );
+        const cachedSeparateInjections = contextInjections.filter((inj) =>
+          SEPARATE_INJECTION_AGENTS.has(inj.agentType),
+        );
+
+        if (cachedPipelineInjections.length > 0) {
+          const wrapped = formatAgentInjections(cachedPipelineInjections, wrapFormat);
           finalMessages = injectAtDepth(finalMessages, [{ content: wrapped, role: "system", depth: 0 }]);
+        }
+
+        for (const inj of cachedSeparateInjections) {
+          // Match the tag/heading the fresh-generation path uses for this agent type.
+          const isRouter = inj.agentType === "knowledge-router";
+          const heading = isRouter ? "Knowledge Router" : "Knowledge Retrieval";
+          const tag = isRouter ? "knowledge_router" : "knowledge_retrieval";
+          const wrapped =
+            wrapFormat === "markdown"
+              ? `\n\n## ${heading}\n${inj.text}`
+              : `\n\n<${tag}>\n${inj.text}\n</${tag}>`;
+          const lastUserIdx = findLastIndex(finalMessages, "user");
+          if (lastUserIdx >= 0) {
+            const target = finalMessages[lastUserIdx]!;
+            finalMessages[lastUserIdx] = { ...target, content: target.content + wrapped };
+          } else {
+            const last = finalMessages[finalMessages.length - 1]!;
+            finalMessages[finalMessages.length - 1] = { ...last, content: last.content + wrapped };
+          }
         }
       }
 
