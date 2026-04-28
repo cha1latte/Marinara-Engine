@@ -255,6 +255,14 @@ test("parseRouterResponse drops non-string ids defensively", () => {
   assert.deepEqual(ids, ["a", "b"]);
 });
 
+test("parseRouterResponse trims whitespace from ids so Map lookups succeed", () => {
+  // Models sometimes return ids with surrounding whitespace or newlines.
+  // Without trimming these would survive the type check but fail the exact
+  // Map.get lookup at the executor layer, surfacing as false "unknown" entries.
+  const ids = parseRouterResponse('{"entryIds": ["  entry-1  ", "\\nentry-2\\n", "entry-3"]}');
+  assert.deepEqual(ids, ["entry-1", "entry-2", "entry-3"]);
+});
+
 // ──────────────────────────────────────────────
 // executeKnowledgeRouter — empty-entries early-return
 // ──────────────────────────────────────────────

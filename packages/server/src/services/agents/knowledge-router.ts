@@ -106,7 +106,12 @@ export function parseRouterResponse(text: string): string[] {
   try {
     const parsed = JSON.parse(jsonSlice) as RouterResponse;
     if (!parsed || !Array.isArray(parsed.entryIds)) return [];
-    return parsed.entryIds.filter((id): id is string => typeof id === "string" && id.length > 0);
+    // Trim each id — the model occasionally returns `" entry-1 "` or includes
+    // a trailing newline. Whitespace would survive the type check below but
+    // fail the exact Map.get lookup at the executor layer.
+    return parsed.entryIds
+      .map((id) => (typeof id === "string" ? id.trim() : ""))
+      .filter((id): id is string => id.length > 0);
   } catch {
     return [];
   }
