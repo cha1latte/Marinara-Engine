@@ -4918,11 +4918,15 @@ function ConversationNotesSection({ chatId }: { chatId: string }) {
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-2 text-[0.625rem] text-[var(--muted-foreground)]">
           <span>
-            {notes.length === 0
-              ? "No notes saved yet."
-              : `${notes.length} ${notes.length === 1 ? "note" : "notes"} · ${totalChars.toLocaleString()} chars`}
+            {notesQuery.isLoading
+              ? "Loading…"
+              : notesQuery.error
+                ? "Failed to load."
+                : notes.length === 0
+                  ? "No notes saved yet."
+                  : `${notes.length} ${notes.length === 1 ? "note" : "notes"} · ${totalChars.toLocaleString()} chars`}
           </span>
-          {notes.length > 0 && (
+          {notes.length > 0 && !notesQuery.isLoading && !notesQuery.error && (
             <button
               type="button"
               onClick={handleClear}
@@ -4935,7 +4939,15 @@ function ConversationNotesSection({ chatId }: { chatId: string }) {
           )}
         </div>
 
-        {notes.length === 0 ? (
+        {notesQuery.isLoading ? (
+          <p className="rounded-lg bg-[var(--secondary)]/50 px-3 py-3 text-center text-[0.625rem] leading-relaxed text-[var(--muted-foreground)]">
+            Loading notes…
+          </p>
+        ) : notesQuery.error ? (
+          <p className="rounded-lg bg-[var(--destructive)]/10 px-3 py-3 text-[0.625rem] leading-relaxed text-[var(--destructive)] ring-1 ring-[var(--destructive)]/25">
+            Failed to load notes.
+          </p>
+        ) : notes.length === 0 ? (
           <p className="rounded-lg bg-[var(--secondary)]/50 px-3 py-3 text-[0.625rem] leading-relaxed text-[var(--muted-foreground)]">
             Characters in the connected conversation can save things they want this roleplay to durably remember by
             wrapping text in <code className="rounded bg-[var(--accent)]/60 px-1">{"<note>...</note>"}</code>. Saved

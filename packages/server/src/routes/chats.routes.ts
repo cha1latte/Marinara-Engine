@@ -175,9 +175,9 @@ export async function chatsRoutes(app: FastifyInstance) {
     return storage.listNotes(req.params.id);
   });
 
-  // Delete a single conversation note
+  // Delete a single conversation note (scoped to the target chat to prevent cross-chat deletion)
   app.delete<{ Params: { id: string; noteId: string } }>("/:id/notes/:noteId", async (req, reply) => {
-    await storage.deleteNote(req.params.noteId);
+    await storage.deleteNoteForChat(req.params.id, req.params.noteId);
     return reply.status(204).send();
   });
 

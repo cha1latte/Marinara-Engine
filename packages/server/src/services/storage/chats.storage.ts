@@ -612,9 +612,11 @@ export function createChatsStorage(db: DB) {
         .orderBy(conversationNotes.createdAt);
     },
 
-    /** Delete a single note by id. */
-    async deleteNote(id: string) {
-      await db.delete(conversationNotes).where(eq(conversationNotes.id, id));
+    /** Delete a single note by id, scoped to its target chat. */
+    async deleteNoteForChat(targetChatId: string, id: string) {
+      await db
+        .delete(conversationNotes)
+        .where(and(eq(conversationNotes.targetChatId, targetChatId), eq(conversationNotes.id, id)));
     },
 
     /** Clear every note targeting a chat. */
