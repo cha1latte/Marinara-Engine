@@ -80,14 +80,23 @@ export function useLorebookEntries(lorebookId: string | null) {
 /**
  * Fetch entries across multiple lorebooks in parallel. Each per-lorebook query
  * is cached independently, so repeated calls with overlapping IDs reuse cached
- * data. Returns the flattened entry array plus loading state — useful for the
- * Knowledge Router's description-coverage badge.
+ * data. Returns the flattened entry array plus loading/error state — useful
+ * for the Knowledge Router's description-coverage badge.
  *
  * Deduplicates IDs defensively before issuing queries — duplicates can't reach
  * this hook through the current UI, but a duplicate would otherwise register
  * the same query twice and inflate aggregate counts in the consumer.
+ *
+ * `isError` surfaces if ANY per-lorebook query failed. Consumers should treat
+ * the entries array as incomplete in that case rather than computing
+ * aggregates over the partial set (which would silently misrepresent reality).
  */
-export function useEntriesAcrossLorebooks(lorebookIds: string[]) {
+export function useEntriesAcrossLorebooks(lorebookIds: string[]): {
+  entries: LorebookEntry[];
+  isLoading: boolean;
+  isError: boolean;
+  error: unknown;
+} {
   const uniqueIds = Array.from(new Set(lorebookIds));
   const queries = useQueries({
     queries: uniqueIds.map((id) => ({
@@ -96,8 +105,10 @@ export function useEntriesAcrossLorebooks(lorebookIds: string[]) {
     })),
   });
   const isLoading = queries.some((q) => q.isLoading);
+  const isError = queries.some((q) => q.isError);
+  const error = queries.find((q) => q.isError)?.error ?? null;
   const entries = queries.flatMap((q) => q.data ?? []);
-  return { entries, isLoading };
+  return { entries, isLoading, isError, error };
 }
 
 export function useLorebookEntry(lorebookId: string | null, entryId: string | null) {

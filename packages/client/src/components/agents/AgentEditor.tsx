@@ -257,16 +257,21 @@ export function AgentEditor() {
   // For the router only: compute description coverage across the selected source
   // lorebooks. Used to render the coverage badge that tells users whether their
   // selected lorebooks are well-described enough for routing precision.
-  const { entries: routerSourceEntries, isLoading: routerEntriesLoading } = useEntriesAcrossLorebooks(
-    isKnowledgeRouterAgent ? localSourceLorebookIds : [],
-  );
+  const {
+    entries: routerSourceEntries,
+    isLoading: routerEntriesLoading,
+    isError: routerEntriesError,
+  } = useEntriesAcrossLorebooks(isKnowledgeRouterAgent ? localSourceLorebookIds : []);
+  // descriptionCoverage is non-null whenever there's something to display — including
+  // the zero-entry case (renders as "No entries yet"). Returning null only when there
+  // are no selected lorebooks at all keeps the badge gated to "user has selected sources".
   const descriptionCoverage = useMemo(() => {
-    if (routerSourceEntries.length === 0) return null;
-    const withDescription = routerSourceEntries.filter((e) => e.description?.trim().length > 0).length;
+    if (localSourceLorebookIds.length === 0) return null;
     const total = routerSourceEntries.length;
-    const ratio = withDescription / total;
+    const withDescription = routerSourceEntries.filter((e) => e.description?.trim().length > 0).length;
+    const ratio = total > 0 ? withDescription / total : 0;
     return { withDescription, total, ratio };
-  }, [routerSourceEntries]);
+  }, [localSourceLorebookIds.length, routerSourceEntries]);
   const { data: allKnowledgeSources } = useKnowledgeSources();
   const uploadSource = useUploadKnowledgeSource();
   const deleteSource = useDeleteKnowledgeSource();
@@ -1071,28 +1076,41 @@ export function AgentEditor() {
                     {/* Description coverage badge — Knowledge Router only.
                         Tells the user how many entries in their selected source lorebooks
                         have descriptions filled in. Routing precision drops sharply when
-                        coverage is low because the router falls back to content snippets. */}
-                    {isKnowledgeRouterAgent && descriptionCoverage && !routerEntriesLoading && (
-                      <div className="flex items-center gap-1.5 text-[0.625rem]">
-                        <div
-                          className={cn(
-                            "h-1.5 w-1.5 rounded-full",
-                            descriptionCoverage.ratio >= 0.75
-                              ? "bg-emerald-400"
-                              : descriptionCoverage.ratio >= 0.25
-                                ? "bg-amber-400"
-                                : "bg-red-400",
-                          )}
-                        />
-                        <span className="text-[var(--muted-foreground)]">
-                          {Math.round(descriptionCoverage.ratio * 100)}% described
-                          <span className="opacity-70">
-                            {" "}
-                            ({descriptionCoverage.withDescription}/{descriptionCoverage.total})
+                        coverage is low because the router falls back to content snippets.
+                        Hidden during loading and on fetch errors (showing partial data
+                        from succeeded queries would silently mislead the user about
+                        coverage). Distinguishes the zero-entries case from loading by
+                        rendering an explicit "No entries yet" pill. */}
+                    {isKnowledgeRouterAgent &&
+                      descriptionCoverage &&
+                      !routerEntriesLoading &&
+                      !routerEntriesError &&
+                      (descriptionCoverage.total === 0 ? (
+                        <div className="flex items-center gap-1.5 text-[0.625rem]">
+                          <div className="h-1.5 w-1.5 rounded-full bg-[var(--muted-foreground)] opacity-50" />
+                          <span className="text-[var(--muted-foreground)]">No entries yet</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 text-[0.625rem]">
+                          <div
+                            className={cn(
+                              "h-1.5 w-1.5 rounded-full",
+                              descriptionCoverage.ratio >= 0.75
+                                ? "bg-emerald-400"
+                                : descriptionCoverage.ratio >= 0.25
+                                  ? "bg-amber-400"
+                                  : "bg-red-400",
+                            )}
+                          />
+                          <span className="text-[var(--muted-foreground)]">
+                            {Math.round(descriptionCoverage.ratio * 100)}% described
+                            <span className="opacity-70">
+                              {" "}
+                              ({descriptionCoverage.withDescription}/{descriptionCoverage.total})
+                            </span>
                           </span>
-                        </span>
-                      </div>
-                    )}
+                        </div>
+                      ))}
                   </div>
                   {allLorebooks && allLorebooks.length > 0 ? (
                     <div className="max-h-48 overflow-y-auto space-y-1 rounded-lg border border-[var(--border)] bg-[var(--secondary)]/30 p-2">
