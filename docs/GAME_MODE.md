@@ -1,8 +1,10 @@
-# Game Mode
+# Game Mode — Getting Started
 
 Game Mode is one of Marinara Engine's chat modes, alongside Conversation, Roleplay, and Visual Novel. Where Conversation is a Discord-style DM with a single character and Roleplay drops you into an immersive scene with sprites and backgrounds, Game Mode runs a full singleplayer RPG: an AI Game Master narrates the world, NPCs, and combat; your party of characters takes actions; and the engine tracks state across sessions (map, NPCs, quests, weather, in-world time).
 
-This guide walks through how Game Mode works under the hood, how to fill out the setup wizard, what makes a good GM character card, and what models and settings tend to give the best experience. If you're brand new and just want to start a game, jump to [Setting up a game](#setting-up-a-game).
+This guide is a getting-started reference. It covers how Game Mode works under the hood, how to fill out the setup wizard, what makes a good GM character card, what models and settings tend to give the best experience, and how to fix the most common failures. If you're brand new and just want to start a game, jump to [Setting up a game](#setting-up-a-game).
+
+**What this guide does not cover:** in-game combat mechanics and dice rolls, NPC and party management during play, save/resume behavior, regenerating a world after world-gen, and other advanced workflows. Ask in the Marinara Discord (or open a GitHub issue) for help with those for now.
 
 ## How Game Mode works
 
@@ -127,7 +129,7 @@ The Marinara community hasn't published a definitive guide on this, so the follo
 - **Avoid hardcoded scenarios in the `scenario` or system-prompt fields.** World-gen will produce its own setting. A GM card with a baked-in scenario fights the engine instead of complementing it.
 - **Model choice still dominates tone.** A card written for a grim narrator paired with a player-positive model will still narrate cheerfully. Plan to compensate via Additional Preferences or pick a model whose tendencies match the card.
 
-The engine doesn't ship a default or example GM card. Your starting point is either your existing character library or a fresh card built from scratch.
+The engine doesn't ship a default or example GM card, and the community hasn't published a canonical one yet. Your starting point is either your existing character library or a fresh card built from scratch. **If you've authored a GM card you're happy with, share it in the Marinara Discord** — we'd like to link or include community-validated examples here in a future revision.
 
 ## Recommended models
 
@@ -237,3 +239,9 @@ Known issue. Switch the sidecar connection to a different provider, or route Sce
 ### Game Mode shows fewer agent toggles than other modes
 
 Intentional. Game Mode exposes only **Scene Analysis** and **Image Generation** in the settings drawer to keep the game's structured turn loop intact. The agents that drive the rest of Game Mode (game-master, party-player, world-state, quest, expression, combat) run automatically and are not user-toggleable.
+
+---
+
+## Found this confusing? Tell us
+
+This guide will only get better with feedback. If something here didn't make sense, contradicted what you saw, or missed a question you actually had — [join the Discord](https://discord.com/invite/KdAkTg94ME) or [open a GitHub issue](https://github.com/Pasta-Devs/Marinara-Engine/issues). The most useful feedback is the specific kind: "I read X and still didn't know how to do Y."
