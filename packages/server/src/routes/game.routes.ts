@@ -4,7 +4,7 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "crypto";
 import { existsSync, readFileSync } from "fs";
-import { join } from "path";
+import { extname, join } from "path";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
 import { createChatsStorage } from "../services/storage/chats.storage.js";
@@ -89,12 +89,14 @@ import type {
 } from "@marinara-engine/shared";
 import { getAssetManifest, GAME_ASSETS_DIR } from "../services/game/asset-manifest.service.js";
 import {
+  GENERATED_GAME_BACKGROUND_EXTS,
   generateNpcPortrait,
   generateBackground,
   generateSceneIllustration,
   readAvatarBase64,
 } from "../services/game/game-asset-generation.js";
 import { saveImageToDisk } from "../services/image/image-generation.js";
+import { createPromptOverridesStorage } from "../services/storage/prompt-overrides.storage.js";
 
 // ──────────────────────────────────────────────
 // Helpers
@@ -289,11 +291,14 @@ async function addGeneratedIllustrationToGallery(opts: {
   const slug = opts.tag.slice(prefix.length);
   if (!/^[a-z0-9-]+$/.test(slug)) return;
 
-  const assetPath = join(GAME_ASSETS_DIR, "backgrounds", "illustrations", `${slug}.png`);
-  if (!existsSync(assetPath)) return;
+  const assetPath = GENERATED_GAME_BACKGROUND_EXTS.map((ext) =>
+    join(GAME_ASSETS_DIR, "backgrounds", "illustrations", `${slug}.${ext}`),
+  ).find((candidate) => existsSync(candidate));
+  if (!assetPath) return;
 
   try {
-    const filePath = saveImageToDisk(opts.chatId, readFileSync(assetPath).toString("base64"), "png");
+    const ext = extname(assetPath).toLowerCase().replace(/^\./, "") || "png";
+    const filePath = saveImageToDisk(opts.chatId, readFileSync(assetPath).toString("base64"), ext);
     const gallery = createGalleryStorage(opts.app.db);
     const prompt = [opts.illustration.reason, opts.illustration.prompt].filter(Boolean).join("\n\n");
     await gallery.create({
@@ -4716,6 +4721,7 @@ export async function gameRoutes(app: FastifyInstance) {
                 imgService: imgServiceHint,
                 imgComfyWorkflow,
                 debugLog: debugLogsEnabled ? debugLog : undefined,
+                promptOverridesStorage: createPromptOverridesStorage(app.db),
               });
               if (generatedTag) {
                 await addGeneratedIllustrationToGallery({
@@ -4780,6 +4786,7 @@ export async function gameRoutes(app: FastifyInstance) {
                   imgApiKey,
                   imgService: imgServiceHint,
                   debugLog: debugLogsEnabled ? debugLog : undefined,
+                  promptOverridesStorage: createPromptOverridesStorage(app.db),
                 });
 
                 if (generatedTag) {
@@ -4826,6 +4833,7 @@ export async function gameRoutes(app: FastifyInstance) {
                   imgApiKey,
                   imgService: imgServiceHint,
                   debugLog: debugLogsEnabled ? debugLog : undefined,
+                  promptOverridesStorage: createPromptOverridesStorage(app.db),
                 });
 
                 if (generatedTag) {
@@ -5032,6 +5040,7 @@ export async function gameRoutes(app: FastifyInstance) {
         imgService: imgServiceHint,
         imgComfyWorkflow,
         debugLog: debugLogsEnabled ? debugLog : undefined,
+        promptOverridesStorage: createPromptOverridesStorage(app.db),
       });
       generatedBackground = tag;
     }
@@ -5090,6 +5099,7 @@ export async function gameRoutes(app: FastifyInstance) {
           imgService: imgServiceHint,
           imgComfyWorkflow,
           debugLog: debugLogsEnabled ? debugLog : undefined,
+          promptOverridesStorage: createPromptOverridesStorage(app.db),
         });
 
         if (tag) {
@@ -5179,6 +5189,7 @@ export async function gameRoutes(app: FastifyInstance) {
           imgService: imgServiceHint,
           imgComfyWorkflow,
           debugLog: debugLogsEnabled ? debugLog : undefined,
+          promptOverridesStorage: createPromptOverridesStorage(app.db),
         });
         if (avatarUrl) {
           generatedNpcAvatars.push({ name: npc.name, avatarUrl });

@@ -197,6 +197,19 @@ export interface ChatMetadata {
   daySummaries?: Record<string, DaySummaryEntry>;
   /** Per-week consolidated conversation summaries (key: Monday "DD.MM.YYYY"). */
   weekSummaries?: Record<string, WeekSummaryEntry>;
+  /**
+   * Hour of day (0-11, local time) at which a conversation "day" rolls over for
+   * summarization. Messages sent before this hour are filed under the previous
+   * day, so a late-night session isn't cut off mid-conversation. Default: 4.
+   */
+  dayRolloverHour?: number;
+  /**
+   * How many of the most recent messages to keep verbatim in the prompt even
+   * after they've been summarized. Bridges the day boundary so characters can
+   * pick up the actual flow of recent conversation, not just the gist. 0 disables.
+   * Valid range: 0-50. Default: 10.
+   */
+  summaryTailMessages?: number;
 
   /** Any extra key-value data */
   [key: string]: unknown;
@@ -214,6 +227,8 @@ export interface Message {
   activeSwipeIndex: number;
   /** Number of swipes for this message (0 or 1 = no alternatives) */
   swipeCount?: number;
+  /** Server-side SQLite row position used only for stable pagination cursors */
+  rowid?: number;
   createdAt: string;
   /** Extra display data */
   extra: MessageExtra;
@@ -299,5 +314,15 @@ export interface OocInfluence {
   content: string;
   anchorMessageId: string;
   consumed: boolean;
+  createdAt: string;
+}
+
+/** A durable note emitted from a conversation chat that persists in the connected roleplay's prompt until cleared. */
+export interface ConversationNote {
+  id: string;
+  sourceChatId: string;
+  targetChatId: string;
+  content: string;
+  anchorMessageId: string;
   createdAt: string;
 }

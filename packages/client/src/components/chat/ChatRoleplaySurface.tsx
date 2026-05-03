@@ -606,6 +606,7 @@ type RoleplaySurfaceProps = {
   onToggleSelectMessage: (toggle: MessageSelectionToggle) => void;
   onSummaryContextSizeChange: (size: number) => void;
   onRerunTrackers: () => void;
+  onRerunSingleTracker: (agentType: string) => void;
   onRetryFailedAgents?: () => void;
   onStartEncounter: () => void;
   onConcludeScene: () => void;
@@ -701,6 +702,7 @@ export function ChatRoleplaySurface({
   onToggleSelectMessage,
   onSummaryContextSizeChange,
   onRerunTrackers,
+  onRerunSingleTracker,
   onRetryFailedAgents,
   onStartEncounter,
   onConcludeScene,
@@ -777,8 +779,10 @@ export function ChatRoleplaySurface({
                         chatId={chat.id}
                         characterCount={chatCharIds.length}
                         layout="top"
+                        isStreaming={isStreaming}
                         onRetriggerTrackers={onRerunTrackers}
                         onRetryFailedAgents={onRetryFailedAgents}
+                        onRerunSingleTracker={onRerunSingleTracker}
                         enabledAgentTypes={enabledAgentTypes}
                         manualTrackers={!!chatMeta.manualTrackers}
                       />
@@ -853,8 +857,10 @@ export function ChatRoleplaySurface({
                         chatId={chat.id}
                         characterCount={chatCharIds.length}
                         layout="top"
+                        isStreaming={isStreaming}
                         onRetriggerTrackers={onRerunTrackers}
                         onRetryFailedAgents={onRetryFailedAgents}
+                        onRerunSingleTracker={onRerunSingleTracker}
                         enabledAgentTypes={enabledAgentTypes}
                         manualTrackers={!!chatMeta.manualTrackers}
                         mobileCompact
@@ -1118,15 +1124,17 @@ export function ChatRoleplaySurface({
                   }
                   chatCharacters={
                     chatCharIds.length > 1
-                      ? chatCharIds.map((id) => {
-                          const info = characterMap.get(id);
-                          return {
-                            id,
-                            name: info?.name ?? "Unknown",
-                            avatarUrl: info?.avatarUrl ?? null,
-                            avatarCrop: info?.avatarCrop ?? null,
-                          };
-                        })
+                      ? chatCharIds
+                          .filter((id) => characterMap.has(id))
+                          .map((id) => {
+                            const info = characterMap.get(id)!;
+                            return {
+                              id,
+                              name: info.name,
+                              avatarUrl: info.avatarUrl ?? null,
+                              avatarCrop: info.avatarCrop ?? null,
+                            };
+                          })
                       : undefined
                   }
                 />

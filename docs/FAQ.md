@@ -47,6 +47,10 @@ Tools like [Tailscale](https://tailscale.com/) give each device a stable IP addr
 - Check that no firewall is blocking the configured port (default `7860`).
 - See the [Troubleshooting](TROUBLESHOOTING.md#app-not-loading-on-mobile--another-device) page for more help.
 
+### Using the Spotify DJ agent on a LAN install?
+
+Spotify's OAuth rules only allow `https://` or `http://127.0.0.1` redirect URIs, so the agent editor will show a `127.0.0.1` URI even when you're accessing Marinara from another device. Either put the server behind HTTPS or use the paste-back fallback in the agent editor — both flows are covered in [Spotify DJ login fails on a remote or LAN install](TROUBLESHOOTING.md#spotify-dj-login-fails-on-a-remote-or-lan-install).
+
 </details>
 
 ---
@@ -61,5 +65,26 @@ Marinara Engine supports a wide range of LLM and image generation providers:
 - **Image generation:** Stability AI, ComfyUI, AUTOMATIC1111 / SD Web UI, and providers that support image output through their chat API
 
 You can configure multiple connections at once and assign different providers per chat. API keys are encrypted at rest with AES-256.
+
+</details>
+
+---
+
+<a id="why-doesnt-my-roleplay-character-remember-the-messages-from-our-connected-conversation"></a>
+
+<details>
+<summary><strong>Why doesn't my roleplay character remember the messages from our connected conversation?</strong></summary>
+<br>
+
+Connected chats (the link between a conversation and a roleplay or game) are intentionally **asymmetric** in how context flows:
+
+**Roleplay → Conversation (automatic):** the roleplay's summary and recent messages are pulled into the conversation's context every turn, so DM characters always know what's happening in the story. Roleplay characters can also break the fourth wall back into the DM by wrapping text in `<ooc>...</ooc>` tags.
+
+**Conversation → Roleplay (manual, via tags):** the conversation's raw messages are *not* injected into the roleplay. To bridge content the other direction, the conversation character uses one of two OOC tags:
+
+- `<influence>...</influence>` — one-shot steer for the *next* roleplay turn, then consumed.
+- `<note>...</note>` — durable; appears on every roleplay turn until you clear it from the chat settings drawer. Use this for facts the roleplay character should keep remembering.
+
+This is by design — pulling raw DM messages into every roleplay turn would inflate the prompt and dilute the story. If you want something from the DM to stick in the roleplay, ask the conversation character to wrap it in a `<note>`.
 
 </details>

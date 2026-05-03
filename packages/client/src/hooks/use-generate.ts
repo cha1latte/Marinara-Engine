@@ -156,7 +156,11 @@ import { stripGmTagsKeepReadables } from "../lib/game-tag-parser";
 import type { Chat, GameMap, Message } from "@marinara-engine/shared";
 
 function sortMessagesByCreatedAt(messages: Message[]): Message[] {
-  return [...messages].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  return [...messages].sort((a, b) => {
+    const createdAtOrder = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    if (createdAtOrder !== 0) return createdAtOrder;
+    return 0;
+  });
 }
 
 function upsertPersistedMessages(qc: QueryClient, chatId: string, incoming: Message[]) {
@@ -188,7 +192,7 @@ function upsertPersistedMessages(qc: QueryClient, chatId: string, incoming: Mess
       if (pages.length === 0) {
         pages.push(missing);
       } else {
-        pages[0] = [...pages[0], ...missing];
+        pages[0] = sortMessagesByCreatedAt([...pages[0], ...missing]);
       }
     }
 
@@ -217,7 +221,7 @@ function appendMissingPersistedMessages(qc: QueryClient, chatId: string, incomin
     if (pages.length === 0) {
       pages.push(missing);
     } else {
-      pages[0] = [...pages[0], ...missing];
+      pages[0] = sortMessagesByCreatedAt([...pages[0], ...missing]);
     }
 
     return { ...old, pages };
@@ -475,8 +479,8 @@ export function useGenerate() {
         qc.setQueryData<InfiniteData<Message[]>>(chatKeys.messages(params.chatId), (old) => {
           if (!old?.pages) return old;
           const pages = [...old.pages];
-          // First page holds newest messages — append to it
-          pages[0] = [...(pages[0] ?? []), optimisticMsg];
+          // First page holds newest messages; merge and re-sort to guarantee order.
+          pages[0] = sortMessagesByCreatedAt([...(pages[0] ?? []), optimisticMsg]);
           return { ...old, pages };
         });
       }
@@ -964,6 +968,11 @@ export function useGenerate() {
               break;
             }
 
+            case "metadata_patch": {
+              qc.invalidateQueries({ queryKey: chatKeys.detail(params.chatId) });
+              break;
+            }
+
             case "text_rewrite": {
               // Consistency Editor replaced the message — update displayed text
               const rw = event.data as { editedText?: string; changes?: Array<{ description: string }> };
@@ -1155,6 +1164,9 @@ export function useGenerate() {
               } else if (actionData.action === "chat_created") {
                 toast(`Started ${actionData.mode} chat with ${actionData.characterName}`, { icon: "💬" });
                 qc.invalidateQueries({ queryKey: ["chats"] });
+              } else if (actionData.action === "data_fetched") {
+                const fetchType = (actionData.fetchType as string) ?? "data";
+                toast(`Fetched ${fetchType}: ${actionData.name}`, { icon: "📋" });
               } else if (actionData.action === "navigate") {
                 const panel = actionData.panel as string;
                 const tab = actionData.tab as string | null;
@@ -1527,6 +1539,13 @@ export function useGenerate() {
                   const reactions = (d.reactions as Array<{ characterName: string; reaction: string }>) ?? [];
                   for (const r of reactions) addEchoMessage(r.characterName, r.reaction);
                 }
+                // CYOA re-roll: push the freshly generated choices into the store
+                // so the buttons in CyoaChoices.tsx swap in immediately.
+                if (result.agentType === "cyoa") {
+                  const d = result.data as Record<string, unknown>;
+                  const choices = (d.choices as Array<{ label: string; text: string }>) ?? [];
+                  if (choices.length > 0 && isActiveChat()) setCyoaChoices(choices);
+                }
                 if (result.resultType === "background_change") {
                   const bg = result.data as { chosen?: string | null };
                   if (bg.chosen) {
@@ -1682,6 +1701,7 @@ export function useGenerate() {
       enqueuePendingCardUpdate,
       clearFailedAgentTypes,
       clearThoughtBubbles,
+      setCyoaChoices,
       setFailedAgentTypes,
       setProcessing,
       setGameState,

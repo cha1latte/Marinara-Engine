@@ -1,7 +1,7 @@
 // ──────────────────────────────────────────────
 // Storage: Chats
 // ──────────────────────────────────────────────
-import { eq, desc, and, lt, gt, sql, count, inArray } from "drizzle-orm";
+import { eq, desc, and, lt, gt, sql, count, inArray, getTableColumns } from "drizzle-orm";
 import type { DB } from "../../db/connection.js";
 import {
   chats,
@@ -9,6 +9,7 @@ import {
   messageSwipes,
   chatImages,
   oocInfluences,
+  conversationNotes,
   agentRuns,
   agentMemory,
 } from "../../db/schema/index.js";
@@ -25,6 +26,45 @@ import {
 
 const GALLERY_DIR = join(DATA_DIR, "gallery");
 
+/** Total character budget for durable conversation notes per roleplay chat. Oldest pruned on insert. */
+export const CONVERSATION_NOTES_BUDGET_CHARS = 4000;
+
+export type MetadataPatch = Record<string, unknown>;
+export type MetadataUpdater = (current: MetadataPatch) => MetadataPatch | Promise<MetadataPatch>;
+
+const metadataPatchQueues = new Map<string, Promise<void>>();
+
+async function withMetadataPatchQueue<T>(chatId: string, operation: () => Promise<T>): Promise<T> {
+  const previous = metadataPatchQueues.get(chatId) ?? Promise.resolve();
+  const queued = previous.catch(() => undefined).then(operation);
+  const queuedVoid = queued.then(
+    () => undefined,
+    () => undefined,
+  );
+  metadataPatchQueues.set(chatId, queuedVoid);
+
+  try {
+    return await queued;
+  } finally {
+    if (metadataPatchQueues.get(chatId) === queuedVoid) {
+      metadataPatchQueues.delete(chatId);
+    }
+  }
+}
+
+function parseMetadata(raw: unknown): MetadataPatch {
+  if (!raw) return {};
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? (parsed as MetadataPatch) : {};
+    } catch {
+      return {};
+    }
+  }
+  return typeof raw === "object" ? (raw as MetadataPatch) : {};
+}
+
 function resolveTimestamps(overrides?: TimestampOverrides | null) {
   const normalized = normalizeTimestampOverrides(overrides);
   const createdAt = normalized?.createdAt ?? now();
@@ -38,6 +78,18 @@ function resolveTimestamps(overrides?: TimestampOverrides | null) {
 function serializeJsonField(value: unknown, fallback: Record<string, unknown>) {
   if (value === undefined || value === null) return JSON.stringify(fallback);
   return typeof value === "string" ? value : JSON.stringify(value);
+}
+
+function parseMessageCursor(before?: string): { createdAt: string; rowid: number } | null {
+  if (!before) return null;
+  const separatorIndex = before.indexOf("|");
+  if (separatorIndex <= 0 || separatorIndex === before.length - 1) return null;
+  const rowid = Number(before.slice(separatorIndex + 1));
+  if (!Number.isSafeInteger(rowid) || rowid < 1) return null;
+  return {
+    createdAt: before.slice(0, separatorIndex),
+    rowid,
+  };
 }
 
 /** Create the chat storage facade used by routes and importers. */
@@ -97,6 +149,29 @@ export function createChatsStorage(db: DB) {
       return this.getById(id);
     },
 
+    /**
+     * Set the folder assignment for a chat, propagating to every branch that
+     * shares its groupId. The sidebar collapses each group to a single visible
+     * row whose folder is read from whichever branch is currently the
+     * representative — so when one branch is created or deleted and the rep
+     * shifts, every branch must already carry the same folderId or the whole
+     * tree falls back to Uncategorized.
+     *
+     * Sibling branches are updated without bumping updatedAt so categorizing
+     * a chat doesn't silently reorder its branch history.
+     */
+    async setFolderForChat(chatId: string, folderId: string | null) {
+      const chat = await this.getById(chatId);
+      if (!chat) return null;
+      if (chat.groupId) {
+        await db.update(chats).set({ folderId }).where(eq(chats.groupId, chat.groupId));
+        await db.update(chats).set({ updatedAt: now() }).where(eq(chats.id, chatId));
+      } else {
+        await db.update(chats).set({ folderId, updatedAt: now() }).where(eq(chats.id, chatId));
+      }
+      return this.getById(chatId);
+    },
+
     /** List all chats belonging to a group. */
     async listByGroup(groupId: string) {
       return db.select().from(chats).where(eq(chats.groupId, groupId)).orderBy(desc(chats.updatedAt));
@@ -108,6 +183,23 @@ export function createChatsStorage(db: DB) {
         .set({ metadata: JSON.stringify(metadata), updatedAt: now() })
         .where(eq(chats.id, id));
       return this.getById(id);
+    },
+
+    async patchMetadata(id: string, patchOrUpdater: MetadataPatch | MetadataUpdater) {
+      return withMetadataPatchQueue(id, async () => {
+        const existing = await this.getById(id);
+        if (!existing) return null;
+
+        const current = parseMetadata(existing.metadata);
+        const patch = typeof patchOrUpdater === "function" ? await patchOrUpdater({ ...current }) : patchOrUpdater;
+        const merged = { ...current, ...patch };
+
+        await db
+          .update(chats)
+          .set({ metadata: JSON.stringify(merged), updatedAt: now() })
+          .where(eq(chats.id, id));
+        return this.getById(id);
+      });
     },
 
     async remove(id: string) {
@@ -146,7 +238,11 @@ export function createChatsStorage(db: DB) {
     },
 
     async listMessages(chatId: string) {
-      const rows = await db.select().from(messages).where(eq(messages.chatId, chatId)).orderBy(messages.createdAt);
+      const rows = await db
+        .select({ ...getTableColumns(messages), rowid: sql<number>`messages.rowid`.as("rowid") })
+        .from(messages)
+        .where(eq(messages.chatId, chatId))
+        .orderBy(messages.createdAt, sql`messages.rowid`);
       const swipeCounts = await db
         .select({ messageId: messageSwipes.messageId, count: count() })
         .from(messageSwipes)
@@ -159,12 +255,19 @@ export function createChatsStorage(db: DB) {
     /** Paginated: returns the latest `limit` messages (optionally before a cursor). */
     async listMessagesPaginated(chatId: string, limit: number, before?: string) {
       const conditions = [eq(messages.chatId, chatId)];
-      if (before) conditions.push(lt(messages.createdAt, before));
+      const cursor = parseMessageCursor(before);
+      if (cursor) {
+        conditions.push(
+          sql`(${messages.createdAt} < ${cursor.createdAt} OR (${messages.createdAt} = ${cursor.createdAt} AND messages.rowid < ${cursor.rowid}))`,
+        );
+      } else if (before) {
+        conditions.push(lt(messages.createdAt, before));
+      }
       const rows = await db
-        .select()
+        .select({ ...getTableColumns(messages), rowid: sql<number>`messages.rowid`.as("rowid") })
         .from(messages)
         .where(and(...conditions))
-        .orderBy(desc(messages.createdAt))
+        .orderBy(desc(messages.createdAt), sql`messages.rowid desc`)
         .limit(limit);
       const reversed = rows.reverse();
       const ids = reversed.map((m) => m.id);
@@ -561,6 +664,71 @@ export function createChatsStorage(db: DB) {
     async deleteInfluencesForChat(chatId: string) {
       await db.delete(oocInfluences).where(eq(oocInfluences.sourceChatId, chatId));
       await db.delete(oocInfluences).where(eq(oocInfluences.targetChatId, chatId));
+    },
+
+    // ── Conversation Notes ──
+
+    /** Create a durable note from a conversation → its connected roleplay, then prune oldest past the char budget. */
+    async createNote(sourceChatId: string, targetChatId: string, content: string, anchorMessageId?: string) {
+      const id = newId();
+      await db.insert(conversationNotes).values({
+        id,
+        sourceChatId,
+        targetChatId,
+        content,
+        anchorMessageId: anchorMessageId ?? null,
+        createdAt: now(),
+      });
+
+      const all = await db
+        .select()
+        .from(conversationNotes)
+        .where(eq(conversationNotes.targetChatId, targetChatId))
+        .orderBy(desc(conversationNotes.createdAt), desc(conversationNotes.id));
+
+      const toDelete: string[] = [];
+      let total = 0;
+      for (let i = 0; i < all.length; i++) {
+        total += all[i]!.content.length;
+        // Always keep the newest note even if it alone exceeds the budget.
+        if (i > 0 && total > CONVERSATION_NOTES_BUDGET_CHARS) {
+          toDelete.push(all[i]!.id);
+        }
+      }
+      if (toDelete.length > 0) {
+        await db.delete(conversationNotes).where(inArray(conversationNotes.id, toDelete));
+      }
+
+      return id;
+    },
+
+    /** List all durable notes targeting a chat, oldest first (for stable prompt ordering).
+     *  `id` secondary sort gives deterministic ordering when timestamps tie (e.g. multiple
+     *  `<note>` tags emitted in a single character response within one millisecond). */
+    async listNotes(targetChatId: string) {
+      return db
+        .select()
+        .from(conversationNotes)
+        .where(eq(conversationNotes.targetChatId, targetChatId))
+        .orderBy(conversationNotes.createdAt, conversationNotes.id);
+    },
+
+    /** Delete a single note by id, scoped to its target chat. */
+    async deleteNoteForChat(targetChatId: string, id: string) {
+      await db
+        .delete(conversationNotes)
+        .where(and(eq(conversationNotes.targetChatId, targetChatId), eq(conversationNotes.id, id)));
+    },
+
+    /** Clear every note targeting a chat. */
+    async clearNotes(targetChatId: string) {
+      await db.delete(conversationNotes).where(eq(conversationNotes.targetChatId, targetChatId));
+    },
+
+    /** Delete all notes associated with a chat (as source or target). */
+    async deleteNotesForChat(chatId: string) {
+      await db.delete(conversationNotes).where(eq(conversationNotes.sourceChatId, chatId));
+      await db.delete(conversationNotes).where(eq(conversationNotes.targetChatId, chatId));
     },
   };
 }

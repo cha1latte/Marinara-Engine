@@ -12,6 +12,7 @@ import {
   Plug,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   Check,
   Plus,
   Trash2,
@@ -21,6 +22,8 @@ import {
   Sparkles,
   Image,
   Pencil,
+  Clock,
+  AlertTriangle,
   GripVertical,
   MessageCircle,
   Bot,
@@ -44,6 +47,7 @@ import {
   Upload,
   Download,
   Star,
+  StickyNote,
 } from "lucide-react";
 import { cn, getAvatarCropStyle, type AvatarCrop } from "../../lib/utils";
 import { showAlertDialog, showConfirmDialog, showPromptDialog } from "../../lib/app-dialogs";
@@ -74,9 +78,18 @@ import {
   useChatMemories,
   useDeleteChatMemory,
   useClearChatMemories,
+  useChatNotes,
+  useDeleteChatNote,
+  useClearChatNotes,
   chatKeys,
 } from "../../hooks/use-chats";
 import { api } from "../../lib/api-client";
+import {
+  getAgentRunIntervalMeta,
+  getCadenceInputValue,
+  parseCadenceInputValue,
+  stepCadenceValue,
+} from "../../lib/agent-cadence";
 import { getCharacterTitle, parseCharacterDisplayData } from "../../lib/character-display";
 import { useUIStore } from "../../stores/ui.store";
 import {
@@ -89,13 +102,24 @@ import {
   useImportChatPreset,
   useSetActiveChatPreset,
 } from "../../hooks/use-chat-presets";
-import type { AgentPhase, ChatMode, ChatMemoryChunk, ChatPreset, ChatPresetSettings } from "@marinara-engine/shared";
+import type {
+  AgentPhase,
+  ChatMode,
+  ChatMemoryChunk,
+  ChatPreset,
+  ChatPresetSettings,
+  ConversationNote,
+} from "@marinara-engine/shared";
 import { useAgentConfigs, useCreateAgent, useUpdateAgent, type AgentConfigRow } from "../../hooks/use-agents";
 import { useAgentStore } from "../../stores/agent.store";
 import {
   BUILT_IN_AGENTS,
   BUILT_IN_TOOLS,
+  DEFAULT_AGENT_CONTEXT_SIZE,
   DEFAULT_AGENT_TOOLS,
+  DEFAULT_AGENT_MAX_TOKENS,
+  MAX_AGENT_MAX_TOKENS,
+  MIN_AGENT_MAX_TOKENS,
   getDefaultBuiltInAgentSettings,
 } from "@marinara-engine/shared";
 import type { Chat, CharacterGroup } from "@marinara-engine/shared";
@@ -134,15 +158,8 @@ type AgentAddPreview = {
   agent: AvailableAgent;
   config: AgentConfigRow | null;
   contextSize: number;
+  maxTokens: number;
   runInterval: number | null;
-};
-
-type AgentRunIntervalMeta = {
-  label: string;
-  unit: string;
-  help: string;
-  defaultValue: number;
-  max: number;
 };
 
 function parseAgentSettings(raw: unknown): Record<string, unknown> {
@@ -163,6 +180,16 @@ function normalizePositiveInteger(value: unknown, fallback: number, max: number)
   return Math.max(1, Math.min(max, Math.trunc(value)));
 }
 
+function normalizeAgentMaxTokens(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return DEFAULT_AGENT_MAX_TOKENS;
+  return Math.max(MIN_AGENT_MAX_TOKENS, Math.min(MAX_AGENT_MAX_TOKENS, Math.trunc(value)));
+}
+
+function normalizeAgentMaxTokensInputValue(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return 1;
+  return Math.max(1, Math.min(MAX_AGENT_MAX_TOKENS, Math.trunc(value)));
+}
+
 function isEnabledFlag(value: unknown): boolean {
   return value === true || value === "true" || value === "1";
 }
@@ -170,37 +197,6 @@ function isEnabledFlag(value: unknown): boolean {
 function normalizeNonNegativeInteger(value: unknown, fallback: number, max: number): number {
   if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
   return Math.max(0, Math.min(max, Math.trunc(value)));
-}
-
-function getAgentRunIntervalMeta(agentType: string): AgentRunIntervalMeta | null {
-  switch (agentType) {
-    case "director":
-      return {
-        label: "Run Interval",
-        unit: "assistant messages",
-        help: "How many assistant messages should pass before the Narrative Director jumps in again. Higher values make it less aggressive.",
-        defaultValue: 5,
-        max: 100,
-      };
-    case "lorebook-keeper":
-      return {
-        label: "Run Interval",
-        unit: "assistant messages",
-        help: "How many assistant messages should pass between Lorebook Keeper updates.",
-        defaultValue: 8,
-        max: 100,
-      };
-    case "chat-summary":
-      return {
-        label: "Triggers After",
-        unit: "user messages",
-        help: "How many user messages should pass before the Automated Chat Summary updates again.",
-        defaultValue: 5,
-        max: 200,
-      };
-    default:
-      return null;
-  }
 }
 
 export function ChatSettingsDrawer({
@@ -657,6 +653,14 @@ export function ChatSettingsDrawer({
   const [showConnectionPicker, setShowConnectionPicker] = useState(false);
   const [showSummariesModal, setShowSummariesModal] = useState(false);
   const [showMemoriesModal, setShowMemoriesModal] = useState(false);
+  // Session-ephemeral: did the user change Day Rollover Hour in this drawer mount?
+  // Used to gate the "transitional duplication" warning so it only appears
+  // immediately after a change (when the warning is operationally useful) and
+  // doesn't permanently clutter chats that already have summaries.
+  const [rolloverTouchedThisSession, setRolloverTouchedThisSession] = useState(false);
+  useEffect(() => {
+    setRolloverTouchedThisSession(false);
+  }, [chat.id]);
   const [connectionSearch, setConnectionSearch] = useState("");
   const [personaSearch, setPersonaSearch] = useState("");
   const [pendingToolIds, setPendingToolIds] = useState<string[]>([]);
@@ -665,6 +669,7 @@ export function ChatSettingsDrawer({
   const [toolSearch, setToolSearch] = useState("");
   const [choiceModalPresetId, setChoiceModalPresetId] = useState<string | null>(null);
   const [agentAddPreview, setAgentAddPreview] = useState<AgentAddPreview | null>(null);
+  const [agentAddCadenceInputFocused, setAgentAddCadenceInputFocused] = useState(false);
   const [addingAgentToChat, setAddingAgentToChat] = useState(false);
   const [isRegeneratingSchedules, setIsRegeneratingSchedules] = useState(false);
   // Synchronous lock to close the re-entry gap: React state commits are async, so two
@@ -732,16 +737,18 @@ export function ChatSettingsDrawer({
   }, [open]);
 
   const openAgentAddModal = (agent: AvailableAgent) => {
+    setAgentAddCadenceInputFocused(false);
     const config = agentConfigsByType.get(agent.id) ?? null;
     const mergedSettings = {
       ...getDefaultBuiltInAgentSettings(agent.id),
       ...parseAgentSettings(config?.settings),
     };
-    const intervalMeta = getAgentRunIntervalMeta(agent.id);
+    const intervalMeta = getAgentRunIntervalMeta(agent.id, agent.builtIn);
     setAgentAddPreview({
       agent,
       config,
-      contextSize: normalizePositiveInteger(mergedSettings.contextSize, 5, 200),
+      contextSize: normalizePositiveInteger(mergedSettings.contextSize, DEFAULT_AGENT_CONTEXT_SIZE, 200),
+      maxTokens: normalizeAgentMaxTokens(mergedSettings.maxTokens),
       runInterval: intervalMeta
         ? normalizePositiveInteger(mergedSettings.runInterval, intervalMeta.defaultValue, intervalMeta.max)
         : null,
@@ -751,14 +758,16 @@ export function ChatSettingsDrawer({
   const confirmAddAgent = async () => {
     if (!agentAddPreview) return;
 
-    const { agent, config, contextSize, runInterval } = agentAddPreview;
+    const { agent, config, contextSize, maxTokens, runInterval } = agentAddPreview;
+    const normalizedMaxTokens = normalizeAgentMaxTokens(maxTokens);
     const builtInMeta = BUILT_IN_AGENTS.find((entry) => entry.id === agent.id) ?? null;
     const nextSettings: Record<string, unknown> = {
       ...getDefaultBuiltInAgentSettings(agent.id),
       ...parseAgentSettings(config?.settings),
       contextSize,
+      maxTokens: normalizedMaxTokens,
     };
-    const intervalMeta = getAgentRunIntervalMeta(agent.id);
+    const intervalMeta = getAgentRunIntervalMeta(agent.id, !!builtInMeta);
     if (intervalMeta && runInterval != null) {
       nextSettings.runInterval = runInterval;
     }
@@ -798,7 +807,9 @@ export function ChatSettingsDrawer({
     }
   };
 
-  const agentAddIntervalMeta = agentAddPreview ? getAgentRunIntervalMeta(agentAddPreview.agent.id) : null;
+  const agentAddIntervalMeta = agentAddPreview
+    ? getAgentRunIntervalMeta(agentAddPreview.agent.id, agentAddPreview.agent.builtIn)
+    : null;
 
   const snapshotCurrentPresetSettings = useCallback((): ChatPresetSettings => {
     return {
@@ -2398,7 +2409,7 @@ export function ChatSettingsDrawer({
             <Section
               label="Connected Chat"
               icon={<ArrowRightLeft size="0.875rem" />}
-              help="Link this conversation to a roleplay or game chat. OOC context flows between them — conversation characters can influence the linked chat, and linked events can flow back into the conversation."
+              help="Link this conversation to a roleplay or game. Recent messages from the linked chat are pulled into context here automatically. To send something the other direction, the character uses `<influence>` (steers the next linked turn, one-shot) or `<note>` (persists on every future linked turn until cleared)."
             >
               {chat.connectedChatId ? (
                 (() => {
@@ -2470,7 +2481,7 @@ export function ChatSettingsDrawer({
             <Section
               label="Connected Conversation"
               icon={<ArrowRightLeft size="0.875rem" />}
-              help="This chat is linked to a conversation. OOC influences from that chat will be injected into context, and game events or roleplay moments can flow back."
+              help="Linked to a conversation. `<influence>` tags from the conversation steer the next turn here (one-shot, then consumed). `<note>` tags persist on every turn until cleared. Raw conversation messages are not injected — use `<note>` for facts this chat should keep remembering."
             >
               {(() => {
                 const linked = (allChats ?? []).find((c: Chat) => c.id === chat.connectedChatId);
@@ -2494,12 +2505,15 @@ export function ChatSettingsDrawer({
             </Section>
           )}
 
+          {/* Notes from Conversation — durable notes saved by the connected conversation's character */}
+          {!isConversation && chat.connectedChatId && <ConversationNotesSection chatId={chat.id} />}
+
           {/* Connect to Conversation — game mode without existing link */}
           {chatMode === "game" && !chat.connectedChatId && (
             <Section
               label="Connected Conversation"
               icon={<ArrowRightLeft size="0.875rem" />}
-              help="Link this game to an OOC conversation. Game events can flow to the conversation and player discussions can influence the game."
+              help="Link this game to an OOC conversation. The conversation character uses `<influence>` (one-shot) or `<note>` (durable) to bridge content into the game; raw conversation messages are not injected. Game events and roleplay moments flow back into the conversation automatically."
             >
               {!showConnectionPicker ? (
                 <button
@@ -3338,18 +3352,95 @@ export function ChatSettingsDrawer({
               icon={<CalendarClock size="0.875rem" />}
               help="To help keep the request context low, the conversation is automatically summarized. Each day is wrapped up into a day summary. Likewise, day summaries are combined into week summaries. Chat messages that have been summarized are not added to context. Only the week summaries, the day summaries of the current week and today's messages are added to the context. This feature currently can't be disabled."
             >
-              <button
-                onClick={() => setShowSummariesModal(true)}
-                className="flex w-full items-center justify-between rounded-lg bg-[var(--secondary)] px-3 py-2.5 text-left transition-all hover:bg-[var(--accent)]"
-              >
-                <div className="flex-1 min-w-0">
-                  <span className="text-[0.6875rem] font-medium">Edit Summaries</span>
+              <div className="space-y-2.5">
+                <button
+                  onClick={() => setShowSummariesModal(true)}
+                  className="flex w-full items-center justify-between rounded-lg bg-[var(--secondary)] px-3 py-2.5 text-left transition-all hover:bg-[var(--accent)]"
+                >
+                  <div className="flex-1 min-w-0">
+                    <span className="text-[0.6875rem] font-medium">Edit Summaries</span>
+                    <p className="text-[0.625rem] text-[var(--muted-foreground)]">
+                      Review and edit what characters remember from this chat.
+                    </p>
+                  </div>
+                  <Pencil size="0.875rem" className="shrink-0 text-[var(--muted-foreground)]" />
+                </button>
+
+                {/* Day rollover hour */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <Clock size="0.75rem" className="text-[var(--primary)]" />
+                    <span className="text-xs font-medium">Day Rollover Hour</span>
+                  </div>
+                  <select
+                    value={(metadata.dayRolloverHour as number | undefined) ?? 4}
+                    onChange={(e) => {
+                      setRolloverTouchedThisSession(true);
+                      updateMeta.mutate({ id: chat.id, dayRolloverHour: Number(e.target.value) });
+                    }}
+                    className="w-full rounded-lg bg-[var(--secondary)] px-3 py-2 text-xs outline-none ring-1 ring-transparent transition-shadow focus:ring-[var(--primary)]/40"
+                  >
+                    {Array.from({ length: 12 }, (_, h) => {
+                      const label = h === 0 ? "12 AM (midnight)" : `${h} AM`;
+                      return (
+                        <option key={h} value={h}>
+                          {label}
+                        </option>
+                      );
+                    })}
+                  </select>
                   <p className="text-[0.625rem] text-[var(--muted-foreground)]">
-                    Review and edit what characters remember from this chat.
+                    Messages sent before this hour count as part of the previous day. Pick a time you&apos;re
+                    never chatting, so a late-night session doesn&apos;t get cut off mid-conversation.
+                  </p>
+                  {rolloverTouchedThisSession &&
+                    (((metadata.daySummaries as Record<string, unknown> | undefined) &&
+                      Object.keys(metadata.daySummaries as Record<string, unknown>).length > 0) ||
+                      ((metadata.weekSummaries as Record<string, unknown> | undefined) &&
+                        Object.keys(metadata.weekSummaries as Record<string, unknown>).length > 0)) && (
+                    <div className="flex items-start gap-1.5 rounded-md bg-amber-400/10 px-2 py-1.5 ring-1 ring-amber-400/20">
+                      <AlertTriangle
+                        size="0.75rem"
+                        className="mt-[0.125rem] shrink-0 text-amber-400/80"
+                      />
+                      <p className="text-[0.625rem] text-amber-400/80 leading-snug">
+                        Existing summaries were built with the previous setting. For today, messages near the
+                        rollover hour may be duplicated or missing from the prompt. From tomorrow onward, new
+                        day summaries will line up correctly. To adjust an older summary, use{" "}
+                        <span className="font-medium">Edit Summaries</span> above.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Recent message tail */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <MessageCircle size="0.75rem" className="text-[var(--primary)]" />
+                    <span className="text-xs font-medium">Recent Message Tail</span>
+                  </div>
+                  <input
+                    type="number"
+                    min={0}
+                    max={50}
+                    step={1}
+                    value={(metadata.summaryTailMessages as number | undefined) ?? 10}
+                    onChange={(e) => {
+                      const raw = Number(e.target.value);
+                      const clamped = Number.isFinite(raw)
+                        ? Math.max(0, Math.min(50, Math.floor(raw)))
+                        : 10;
+                      updateMeta.mutate({ id: chat.id, summaryTailMessages: clamped });
+                    }}
+                    className="w-full rounded-lg bg-[var(--secondary)] px-3 py-2 text-xs outline-none ring-1 ring-transparent transition-shadow focus:ring-[var(--primary)]/40"
+                  />
+                  <p className="text-[0.625rem] text-[var(--muted-foreground)]">
+                    How many recent messages to keep word-for-word, even once they&apos;re summarized. Helps
+                    characters pick up the actual flow of last night&apos;s conversation instead of just the
+                    gist. Set to <span className="font-medium">0</span> to disable.
                   </p>
                 </div>
-                <Pencil size="0.875rem" className="shrink-0 text-[var(--muted-foreground)]" />
-              </button>
+              </div>
             </Section>
           )}
 
@@ -3854,40 +3945,84 @@ export function ChatSettingsDrawer({
               </div>
             </div>
 
-            {agentAddPreview.agent.id !== "chat-summary" ? (
-              <div className="space-y-1.5">
-                <label className="block text-[0.6875rem] font-semibold text-[var(--foreground)]">Context Size</label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="number"
-                    min={1}
-                    max={200}
-                    value={agentAddPreview.contextSize}
-                    onChange={(e) => {
-                      const value = parseInt(e.target.value, 10);
-                      setAgentAddPreview((current) =>
-                        current
-                          ? {
-                              ...current,
-                              contextSize: Number.isFinite(value) ? Math.max(1, Math.min(200, value)) : 5,
-                            }
-                          : current,
-                      );
-                    }}
-                    disabled={addingAgentToChat}
-                    className="w-28 rounded-xl bg-[var(--secondary)] px-3 py-2.5 text-sm tabular-nums ring-1 ring-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] disabled:cursor-not-allowed disabled:opacity-60"
-                  />
-                  <span className="text-[0.6875rem] text-[var(--muted-foreground)]">messages</span>
+            <div className="space-y-1.5">
+              <label className="block text-[0.6875rem] font-semibold text-[var(--foreground)]">Agent Budget</label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {agentAddPreview.agent.id !== "chat-summary" ? (
+                  <div>
+                    <label className="mb-1 block text-[0.625rem] font-medium text-[var(--muted-foreground)]">
+                      Context Size
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="number"
+                        min={1}
+                        max={200}
+                        value={agentAddPreview.contextSize}
+                        onChange={(e) => {
+                          const value = parseInt(e.target.value, 10);
+                          setAgentAddPreview((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  contextSize: Number.isFinite(value)
+                                    ? Math.max(1, Math.min(200, value))
+                                    : DEFAULT_AGENT_CONTEXT_SIZE,
+                                }
+                              : current,
+                          );
+                        }}
+                        disabled={addingAgentToChat}
+                        className="w-28 rounded-xl bg-[var(--secondary)] px-3 py-2.5 text-sm tabular-nums ring-1 ring-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] disabled:cursor-not-allowed disabled:opacity-60"
+                      />
+                      <span className="text-[0.6875rem] text-[var(--muted-foreground)]">messages</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-xl bg-[var(--accent)]/50 px-3 py-2.5 text-[0.6875rem] text-[var(--muted-foreground)] ring-1 ring-[var(--border)]">
+                    Chat Summary context size is managed in the Chat Summary panel after you add the agent.
+                  </div>
+                )}
+                <div>
+                  <label className="mb-1 block text-[0.625rem] font-medium text-[var(--muted-foreground)]">
+                    Max Output Tokens
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="number"
+                      min={MIN_AGENT_MAX_TOKENS}
+                      max={MAX_AGENT_MAX_TOKENS}
+                      value={agentAddPreview.maxTokens}
+                      onChange={(e) => {
+                        const value = parseInt(e.target.value, 10);
+                        setAgentAddPreview((current) =>
+                          current
+                            ? {
+                                ...current,
+                                maxTokens: normalizeAgentMaxTokensInputValue(
+                                  Number.isFinite(value) ? value : undefined,
+                                ),
+                              }
+                            : current,
+                        );
+                      }}
+                      onBlur={() => {
+                        setAgentAddPreview((current) =>
+                          current ? { ...current, maxTokens: normalizeAgentMaxTokens(current.maxTokens) } : current,
+                        );
+                      }}
+                      disabled={addingAgentToChat}
+                      className="w-32 rounded-xl bg-[var(--secondary)] px-3 py-2.5 text-sm tabular-nums ring-1 ring-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] disabled:cursor-not-allowed disabled:opacity-60"
+                    />
+                    <span className="text-[0.6875rem] text-[var(--muted-foreground)]">tokens</span>
+                  </div>
                 </div>
-                <p className="text-[0.625rem] text-[var(--muted-foreground)]">
-                  How many recent chat messages this agent should receive as working context.
-                </p>
               </div>
-            ) : (
-              <div className="rounded-xl bg-[var(--accent)]/50 px-3 py-2.5 text-[0.6875rem] text-[var(--muted-foreground)] ring-1 ring-[var(--border)]">
-                Context size for automated summaries is managed in the Chat Summary panel after you add the agent.
-              </div>
-            )}
+              <p className="text-[0.625rem] text-[var(--muted-foreground)]">
+                Context size controls recent chat messages. Max output reserves completion room; lower it on small local
+                contexts if logs show the prompt budget collapsing.
+              </p>
+            </div>
 
             {agentAddIntervalMeta && agentAddPreview.runInterval != null && (
               <div className="space-y-1.5">
@@ -3895,27 +4030,126 @@ export function ChatSettingsDrawer({
                   {agentAddIntervalMeta.label}
                 </label>
                 <div className="flex items-center gap-3">
-                  <input
-                    type="number"
-                    min={1}
-                    max={agentAddIntervalMeta.max}
-                    value={agentAddPreview.runInterval}
-                    onChange={(e) => {
-                      const value = parseInt(e.target.value, 10);
-                      setAgentAddPreview((current) =>
-                        current
-                          ? {
-                              ...current,
-                              runInterval: Number.isFinite(value)
-                                ? Math.max(1, Math.min(agentAddIntervalMeta.max, value))
-                                : agentAddIntervalMeta.defaultValue,
-                            }
-                          : current,
-                      );
-                    }}
-                    disabled={addingAgentToChat}
-                    className="w-28 rounded-xl bg-[var(--secondary)] px-3 py-2.5 text-sm tabular-nums ring-1 ring-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] disabled:cursor-not-allowed disabled:opacity-60"
-                  />
+                  {agentAddPreview.agent.builtIn ? (
+                    <input
+                      type="number"
+                      min={1}
+                      max={agentAddIntervalMeta.max}
+                      value={agentAddPreview.runInterval}
+                      onChange={(e) => {
+                        setAgentAddPreview((current) =>
+                          current
+                            ? {
+                                ...current,
+                                runInterval: parseCadenceInputValue(
+                                  e.target.value,
+                                  agentAddIntervalMeta.defaultValue,
+                                  agentAddIntervalMeta.max,
+                                ),
+                              }
+                            : current,
+                        );
+                      }}
+                      disabled={addingAgentToChat}
+                      className="w-28 rounded-xl bg-[var(--secondary)] px-3 py-2.5 text-sm tabular-nums ring-1 ring-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] disabled:cursor-not-allowed disabled:opacity-60"
+                    />
+                  ) : (
+                    <div className="relative w-28">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={
+                          agentAddCadenceInputFocused
+                            ? String(agentAddPreview.runInterval)
+                            : getCadenceInputValue(agentAddPreview.runInterval)
+                        }
+                        onFocus={(e) => {
+                          setAgentAddCadenceInputFocused(true);
+                          e.target.select();
+                        }}
+                        onBlur={() => setAgentAddCadenceInputFocused(false)}
+                        onKeyDown={(e) => {
+                          if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+                          e.preventDefault();
+                          const delta = e.key === "ArrowUp" ? 1 : -1;
+                          setAgentAddPreview((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  runInterval: stepCadenceValue(
+                                    current.runInterval ?? 1,
+                                    delta,
+                                    agentAddIntervalMeta.max,
+                                  ),
+                                }
+                              : current,
+                          );
+                        }}
+                        onChange={(e) => {
+                          setAgentAddPreview((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  runInterval: parseCadenceInputValue(
+                                    e.target.value,
+                                    current.runInterval ?? 1,
+                                    agentAddIntervalMeta.max,
+                                  ),
+                                }
+                              : current,
+                          );
+                        }}
+                        disabled={addingAgentToChat}
+                        className="w-full rounded-xl bg-[var(--secondary)] px-3 py-2.5 pr-8 text-sm tabular-nums ring-1 ring-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] disabled:cursor-not-allowed disabled:opacity-60"
+                      />
+                      <div className="absolute right-1 top-1/2 flex -translate-y-1/2 flex-col overflow-hidden rounded-md">
+                        <button
+                          type="button"
+                          aria-label="Increase trigger cadence"
+                          disabled={addingAgentToChat}
+                          onClick={() => {
+                            setAgentAddPreview((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    runInterval: stepCadenceValue(
+                                      current.runInterval ?? 1,
+                                      1,
+                                      agentAddIntervalMeta.max,
+                                    ),
+                                  }
+                                : current,
+                            );
+                          }}
+                          className="flex h-4 w-5 items-center justify-center text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <ChevronUp size="0.6875rem" />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Decrease trigger cadence"
+                          disabled={addingAgentToChat}
+                          onClick={() => {
+                            setAgentAddPreview((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    runInterval: stepCadenceValue(
+                                      current.runInterval ?? 1,
+                                      -1,
+                                      agentAddIntervalMeta.max,
+                                    ),
+                                  }
+                                : current,
+                            );
+                          }}
+                          className="flex h-4 w-5 items-center justify-center text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <ChevronDown size="0.6875rem" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   <span className="text-[0.6875rem] text-[var(--muted-foreground)]">{agentAddIntervalMeta.unit}</span>
                 </div>
                 <p className="text-[0.625rem] text-[var(--muted-foreground)]">{agentAddIntervalMeta.help}</p>
@@ -4956,5 +5190,111 @@ function HapticConnectionPanel() {
         </div>
       )}
     </div>
+  );
+}
+
+function ConversationNotesSection({ chatId }: { chatId: string }) {
+  const notesQuery = useChatNotes(chatId);
+  const deleteNote = useDeleteChatNote(chatId);
+  const clearNotes = useClearChatNotes(chatId);
+  const notes = useMemo<ConversationNote[]>(() => notesQuery.data ?? [], [notesQuery.data]);
+  const totalChars = useMemo(() => notes.reduce((acc, n) => acc + n.content.length, 0), [notes]);
+
+  const handleDelete = async (note: ConversationNote) => {
+    const ok = await showConfirmDialog({
+      title: "Delete Note",
+      message: "Remove this note from the connected roleplay's prompt?",
+      confirmLabel: "Delete",
+      tone: "destructive",
+    });
+    if (ok) deleteNote.mutate(note.id);
+  };
+
+  const handleClear = async () => {
+    if (notes.length === 0) return;
+    const ok = await showConfirmDialog({
+      title: "Clear All Notes",
+      message: "Remove every durable note from this roleplay? This cannot be undone.",
+      confirmLabel: "Clear all",
+      tone: "destructive",
+    });
+    if (ok) clearNotes.mutate();
+  };
+
+  return (
+    <Section
+      label="Conversation Notes"
+      icon={<StickyNote size="0.875rem" />}
+      count={notes.length}
+      help="Durable notes the connected conversation's character has saved using <note>. They persist in this roleplay's prompt every turn until cleared."
+    >
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2 text-[0.625rem] text-[var(--muted-foreground)]">
+          <span>
+            {notesQuery.isLoading
+              ? "Loading…"
+              : notesQuery.error
+                ? "Failed to load."
+                : notes.length === 0
+                  ? "No notes saved yet."
+                  : `${notes.length} ${notes.length === 1 ? "note" : "notes"} · ${totalChars.toLocaleString()} chars`}
+          </span>
+          {notes.length > 0 && !notesQuery.isLoading && !notesQuery.error && (
+            <button
+              type="button"
+              onClick={handleClear}
+              disabled={clearNotes.isPending}
+              className="rounded-md p-1 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--destructive)]/15 hover:text-[var(--destructive)] disabled:opacity-40"
+              title="Clear all notes"
+            >
+              <Trash2 size="0.75rem" />
+            </button>
+          )}
+        </div>
+
+        {notesQuery.isLoading ? (
+          <p className="rounded-lg bg-[var(--secondary)]/50 px-3 py-3 text-center text-[0.625rem] leading-relaxed text-[var(--muted-foreground)]">
+            Loading notes…
+          </p>
+        ) : notesQuery.error ? (
+          <p className="rounded-lg bg-[var(--destructive)]/10 px-3 py-3 text-[0.625rem] leading-relaxed text-[var(--destructive)] ring-1 ring-[var(--destructive)]/25">
+            Failed to load notes.
+          </p>
+        ) : notes.length === 0 ? (
+          <p className="rounded-lg bg-[var(--secondary)]/50 px-3 py-3 text-[0.625rem] leading-relaxed text-[var(--muted-foreground)]">
+            Characters in the connected conversation can save things they want this roleplay to durably remember by
+            wrapping text in <code className="rounded bg-[var(--accent)]/60 px-1">{"<note>...</note>"}</code>. Saved
+            notes will appear here.
+          </p>
+        ) : (
+          <ul className="space-y-1.5">
+            {notes.map((note) => (
+              <li
+                key={note.id}
+                className="flex items-start gap-2 rounded-lg bg-[var(--card)] px-2.5 py-2 ring-1 ring-[var(--border)]"
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="whitespace-pre-wrap break-words text-[0.6875rem] leading-relaxed text-[var(--foreground)]">
+                    {note.content}
+                  </p>
+                  <p className="mt-1 text-[0.5625rem] text-[var(--muted-foreground)]">
+                    {formatMemoryDate(note.createdAt)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleDelete(note)}
+                  disabled={deleteNote.isPending}
+                  className="shrink-0 rounded-md p-1 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--destructive)]/15 hover:text-[var(--destructive)] disabled:opacity-40"
+                  title="Delete this note"
+                >
+                  <Trash2 size="0.6875rem" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </Section>
   );
 }

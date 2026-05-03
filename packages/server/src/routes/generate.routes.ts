@@ -30,6 +30,8 @@ import { createGameStateStorage } from "../services/storage/game-state.storage.j
 import { createCustomToolsStorage } from "../services/storage/custom-tools.storage.js";
 import { createLorebooksStorage } from "../services/storage/lorebooks.storage.js";
 import { createRegexScriptsStorage } from "../services/storage/regex-scripts.storage.js";
+import { createPromptOverridesStorage } from "../services/storage/prompt-overrides.storage.js";
+import { loadPrompt, CONVERSATION_SELFIE } from "../services/prompt-overrides/index.js";
 import { processLorebooks } from "../services/lorebook/index.js";
 import { injectAtDepth } from "../services/lorebook/prompt-injector.js";
 import { createLLMProvider } from "../services/llm/provider-registry.js";
@@ -44,7 +46,7 @@ import {
   type ChatMessage,
   type LLMUsage,
 } from "../services/llm/base-provider.js";
-import { executeToolCalls } from "../services/tools/tool-executor.js";
+import { executeToolCalls, type MetadataPatchInput } from "../services/tools/tool-executor.js";
 import { createAgentPipeline, type ResolvedAgent, type AgentInjection } from "../services/agents/agent-pipeline.js";
 import { DATA_DIR } from "../utils/data-dir.js";
 import { executeAgent } from "../services/agents/agent-executor.js";
@@ -58,6 +60,7 @@ import {
   type SelfieCommand,
   type MemoryCommand,
   type InfluenceCommand,
+  type NoteCommand,
   type SceneCommand,
   type HapticCommand,
   type CreatePersonaCommand,
@@ -897,7 +900,12 @@ export async function generateRoutes(app: FastifyInstance) {
           // Persist updated per-chat entry state overrides (ephemeral countdown)
           if (assembled.updatedEntryStateOverrides) {
             chatMeta.entryStateOverrides = assembled.updatedEntryStateOverrides;
-            await chats.updateMetadata(input.chatId, chatMeta);
+            const freshChat = await chats.getById(input.chatId);
+            const freshMeta = freshChat ? (parseExtra(freshChat.metadata) as Record<string, unknown>) : chatMeta;
+            await chats.updateMetadata(input.chatId, {
+              ...freshMeta,
+              entryStateOverrides: assembled.updatedEntryStateOverrides,
+            });
           }
         }
       }
@@ -1041,13 +1049,27 @@ export async function generateRoutes(app: FastifyInstance) {
 
         // Inject timestamps: today's messages get [HH:MM] per message,
         // older messages are grouped by date inside <date="DD.MM.YYYY"> blocks.
+        // The "day" boundary is shifted by dayRolloverHour so a late-night
+        // session doesn't get split when calendar midnight passes.
         const now = new Date();
-        const todayKey = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
+        const rolloverHour = Math.max(
+          0,
+          Math.min(11, Math.floor((chatMeta.dayRolloverHour as number | undefined) ?? 4)),
+        );
+        const shifted = (ts: Date) => new Date(ts.getTime() - rolloverHour * 3_600_000);
+        const logicalNow = shifted(now);
+        const todayKey = `${logicalNow.getFullYear()}-${logicalNow.getMonth()}-${logicalNow.getDate()}`;
 
-        const isSameDay = (ts: Date) => `${ts.getFullYear()}-${ts.getMonth()}-${ts.getDate()}` === todayKey;
+        const isSameDay = (ts: Date) => {
+          const d = shifted(ts);
+          return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` === todayKey;
+        };
 
-        const fmtDate = (ts: Date) =>
-          `${String(ts.getDate()).padStart(2, "0")}.${String(ts.getMonth() + 1).padStart(2, "0")}.${ts.getFullYear()}`;
+        const fmtDate = (ts: Date) => {
+          const d = shifted(ts);
+          return `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`;
+        };
+        const todayDateKey = fmtDate(now);
         const fmtTime = (ts: Date) =>
           `${String(ts.getHours()).padStart(2, "0")}:${String(ts.getMinutes()).padStart(2, "0")}`;
 
@@ -1061,10 +1083,13 @@ export async function generateRoutes(app: FastifyInstance) {
         }
 
         // Separate into past-day groups and today's messages, preserving order
-        type BucketMsg = { role: string; content: string; author: string };
+        type BucketMsg = { role: string; content: string; author: string; ts: Date };
         type Bucket = { date: string; msgs: BucketMsg[] };
         const buckets: Array<Bucket | { role: string; content: string }> = [];
         let currentBucket: Bucket | null = null;
+        // Index of today's first verbatim message in the buckets array. Used
+        // to splice the tail block in immediately before today begins.
+        let firstTodayIdx: number | null = null;
 
         for (let i = 0; i < finalMessages.length; i++) {
           const msg = finalMessages[i]!;
@@ -1092,16 +1117,17 @@ export async function generateRoutes(app: FastifyInstance) {
               buckets.push(currentBucket);
               currentBucket = null;
             }
+            if (firstTodayIdx === null) firstTodayIdx = buckets.length;
             buckets.push({ ...msg, content: `[${fmtTime(ts)}] ${stripLeakedTimestamps(msg.content)}` });
           } else {
             const dateKey = fmtDate(ts);
             if (currentBucket && currentBucket.date === dateKey) {
-              currentBucket.msgs.push({ ...msg, content: stripLeakedTimestamps(msg.content), author });
+              currentBucket.msgs.push({ ...msg, content: stripLeakedTimestamps(msg.content), author, ts });
             } else {
               if (currentBucket) buckets.push(currentBucket);
               currentBucket = {
                 date: dateKey,
-                msgs: [{ ...msg, content: stripLeakedTimestamps(msg.content), author }],
+                msgs: [{ ...msg, content: stripLeakedTimestamps(msg.content), author, ts }],
               };
             }
           }
@@ -1137,9 +1163,10 @@ export async function generateRoutes(app: FastifyInstance) {
         for (const b of buckets) {
           if (!("date" in b && "msgs" in b)) continue;
           const bucket = b as Bucket;
-          const bucketDate = parseDateKey(bucket.date);
-          // Skip today and already-summarized days
-          if (isSameDay(bucketDate) || daySummaries[bucket.date]) continue;
+          // Skip today and already-summarized days. bucket.date is already a
+          // logical-day key; compare strings to avoid double-shifting through
+          // parseDateKey + isSameDay.
+          if (bucket.date === todayDateKey || daySummaries[bucket.date]) continue;
           bucketsToSummarize.push(bucket);
         }
 
@@ -1280,7 +1307,9 @@ export async function generateRoutes(app: FastifyInstance) {
           if (weekSummaries[weekKey]) continue; // already consolidated
           const monday = parseDateKey(weekKey);
           const nextMonday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 7);
-          if (now.getTime() >= nextMonday.getTime()) {
+          // Compare against logical-now so the consolidation rolls over with
+          // the same day boundary used for bucketing.
+          if (logicalNow.getTime() >= nextMonday.getTime()) {
             // This week is fully in the past — consolidate
             weeksToConsolidate.push({ weekKey, days });
           }
@@ -1422,24 +1451,77 @@ export async function generateRoutes(app: FastifyInstance) {
           }
         }
 
+        // Tail messages: pull the last N messages from past-summarized buckets
+        // so the model has concrete recent dialogue to continue from, not just
+        // the gist of yesterday's summary. Walks across day boundaries when
+        // earlier buckets are short.
+        const tailCount = Math.max(
+          0,
+          Math.min(50, Math.floor((chatMeta.summaryTailMessages as number | undefined) ?? 10)),
+        );
+        const tailEntries: BucketMsg[] = [];
+        if (tailCount > 0) {
+          outer: for (let bi = buckets.length - 1; bi >= 0; bi--) {
+            const b = buckets[bi]!;
+            if (!("date" in b && "msgs" in b)) continue;
+            const bucket = b as Bucket;
+            // Pull only from summarized past days. Today's messages are already
+            // verbatim, and unsummarized past days will be emitted verbatim too,
+            // so neither needs duplicating into a tail block.
+            if (bucket.date === todayDateKey) continue;
+            if (!daySummaries[bucket.date]) continue;
+            for (let mi = bucket.msgs.length - 1; mi >= 0; mi--) {
+              tailEntries.unshift(bucket.msgs[mi]!);
+              if (tailEntries.length >= tailCount) break outer;
+            }
+          }
+        }
+
         // Flatten: consolidated weeks → single <summary week="..."> block,
         // non-consolidated summarized days → <summary date="..."> block,
-        // today → individual timestamped messages
+        // today → individual timestamped messages.
+        // The tail block is spliced in at firstTodayIdx so it sits between
+        // the last summary and today's first verbatim message.
         const weekBlocksEmitted = new Set<string>();
-        finalMessages = buckets.flatMap((b) => {
+        const fmtTailPrefix = (ts: Date) => {
+          const d = String(ts.getDate()).padStart(2, "0");
+          const mo = String(ts.getMonth() + 1).padStart(2, "0");
+          const h = String(ts.getHours()).padStart(2, "0");
+          const mi = String(ts.getMinutes()).padStart(2, "0");
+          return `[${d}.${mo} ${h}:${mi}]`;
+        };
+        const buildTailTurns = () => {
+          if (tailEntries.length === 0) return [];
+          // Match today's verbatim format: timestamp prefix, no author name.
+          // The [DD.MM HH:MM] prefix unambiguously distinguishes tail turns
+          // from today's [HH:MM] turns, so no wrapper tag is needed — the
+          // model can see from the timestamps alone where today begins.
+          return tailEntries.map((m) => ({
+            role: m.role as "user" | "assistant" | "system",
+            content: `${fmtTailPrefix(m.ts)} ${m.content}`,
+          }));
+        };
+
+        finalMessages = buckets.flatMap((b, bIdx) => {
+          // Splice the tail in immediately before today's first verbatim
+          // message. firstTodayIdx is null when today has no messages yet —
+          // in that case we fall through to the post-loop append below.
+          const prefix = bIdx === firstTodayIdx ? buildTailTurns() : [];
+
           if ("date" in b && "msgs" in b) {
             const bucket = b as Bucket;
             const weekKey = dayToWeek.get(bucket.date);
 
             // Day belongs to a consolidated week → emit one week summary block (first occurrence)
             if (weekKey && weekSummaries[weekKey]) {
-              if (weekBlocksEmitted.has(weekKey)) return []; // already emitted for this week
+              if (weekBlocksEmitted.has(weekKey)) return prefix; // already emitted for this week
               weekBlocksEmitted.add(weekKey);
               const wEntry = weekSummaries[weekKey]!;
               const monday = parseDateKey(weekKey);
               const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6);
               // Key details are surfaced separately via <important_memories> in the system prompt.
               return [
+                ...prefix,
                 {
                   role: "system" as const,
                   content: `<summary week="${weekKey} – ${fmtDateKey(sunday)}">\n${wEntry.summary}\n</summary>`,
@@ -1452,22 +1534,31 @@ export async function generateRoutes(app: FastifyInstance) {
             if (entry) {
               // Key details are surfaced separately via <important_memories> in the system prompt.
               return [
+                ...prefix,
                 {
                   role: "system" as const,
                   content: `<summary date="${bucket.date}">\n${entry.summary}\n</summary>`,
                 },
               ];
             }
-            // Unsummarized day (today) — keep each message as its own turn
-            return bucket.msgs.map((m, idx) => {
+            // Unsummarized past day — keep each message as its own turn
+            const turns = bucket.msgs.map((m, idx) => {
               let content = `${m.author}: ${m.content}`;
               if (idx === 0) content = `<date="${bucket.date}">\n${content}`;
               if (idx === bucket.msgs.length - 1) content = `${content}\n</date>`;
               return { role: m.role as "user" | "assistant" | "system", content };
             });
+            return [...prefix, ...turns];
           }
-          return [b as { role: "system" | "user" | "assistant"; content: string }];
+          return [...prefix, b as { role: "system" | "user" | "assistant"; content: string }];
         });
+
+        // Edge case: today has no messages yet (firstTodayIdx is null).
+        // Append the tail at the end so it still bridges into the upcoming
+        // generation rather than being silently dropped.
+        if (firstTodayIdx === null && tailEntries.length > 0) {
+          finalMessages = [...finalMessages, ...buildTailTurns()];
+        }
 
         // Build the system prompt
         // Use custom system prompt if set, otherwise the built-in default
@@ -1909,6 +2000,11 @@ export async function generateRoutes(app: FastifyInstance) {
                 ``,
                 `Influences are injected into the roleplay's context before the next generation. Use them sparingly — only when conversation content genuinely should cross over into the roleplay.`,
                 `The influence tag is stripped from your visible message. The rest of your response is shown normally.`,
+                ``,
+                `If something said in this conversation should durably persist in the roleplay's context across many turns (a fact the character should keep remembering, a promise made, a secret revealed, a name learned), create a note tag instead of an influence:`,
+                `<note>fact, decision, or detail the roleplay character should keep remembering</note>`,
+                `Notes are shown to the roleplay character on every future turn until the user clears them. Use influences for one-shot mid-scene steering; use notes for things that should remain true going forward. Use notes sparingly — every saved note costs prompt budget on every roleplay turn.`,
+                `The note tag is stripped from your visible message.`,
                 `</connected_roleplay_instructions>`,
               ].join("\n");
           } else if (connectedChat && connectedChat.mode === "game") {
@@ -2001,6 +2097,11 @@ export async function generateRoutes(app: FastifyInstance) {
                 ``,
                 `Influences are injected into the game's context before the next generation. Use them sparingly — only when conversation content genuinely should cross over into the game.`,
                 `The influence tag is stripped from your visible message. The rest of your response is shown normally.`,
+                ``,
+                `If something said in this conversation should durably persist in the game's context across many turns (an established world fact, an ongoing party dynamic, a recurring NPC trait, a secret the GM should keep remembering), create a note tag instead of an influence:`,
+                `<note>fact, decision, or detail the game should keep remembering</note>`,
+                `Notes are shown to the game on every future turn until the user clears them. Use influences for one-shot mid-scene steering; use notes for things that should remain true going forward. Use notes sparingly — every saved note costs prompt budget on every game turn.`,
+                `The note tag is stripped from your visible message.`,
                 `</connected_game_instructions>`,
               ].join("\n");
           }
@@ -2054,7 +2155,12 @@ export async function generateRoutes(app: FastifyInstance) {
           // Persist updated per-chat entry state overrides (ephemeral countdown)
           if (lorebookResult.updatedEntryStateOverrides) {
             chatMeta.entryStateOverrides = lorebookResult.updatedEntryStateOverrides;
-            await chats.updateMetadata(input.chatId, chatMeta);
+            const freshChat = await chats.getById(input.chatId);
+            const freshMeta = freshChat ? (parseExtra(freshChat.metadata) as Record<string, unknown>) : chatMeta;
+            await chats.updateMetadata(input.chatId, {
+              ...freshMeta,
+              entryStateOverrides: lorebookResult.updatedEntryStateOverrides,
+            });
           }
           const loreContent = [lorebookResult.worldInfoBefore, lorebookResult.worldInfoAfter]
             .filter(Boolean)
@@ -2095,7 +2201,12 @@ export async function generateRoutes(app: FastifyInstance) {
 
         if (lorebookResult.updatedEntryStateOverrides) {
           chatMeta.entryStateOverrides = lorebookResult.updatedEntryStateOverrides;
-          await chats.updateMetadata(input.chatId, chatMeta);
+          const freshChat = await chats.getById(input.chatId);
+          const freshMeta = freshChat ? (parseExtra(freshChat.metadata) as Record<string, unknown>) : chatMeta;
+          await chats.updateMetadata(input.chatId, {
+            ...freshMeta,
+            entryStateOverrides: lorebookResult.updatedEntryStateOverrides,
+          });
         }
         const loreContent = [lorebookResult.worldInfoBefore, lorebookResult.worldInfoAfter].filter(Boolean).join("\n");
         if (loreContent) {
@@ -2151,6 +2262,37 @@ export async function generateRoutes(app: FastifyInstance) {
           // Mark influences as consumed
           for (const inf of pendingInfluences) {
             await chats.markInfluenceConsumed(inf.id);
+          }
+        }
+      }
+
+      // ── Roleplay/Game: inject durable conversation notes (persist until cleared) ──
+      // Same scene bypass as influences — scenes are self-contained.
+      if ((chatMode === "roleplay" || chatMode === "game") && chat.connectedChatId && !isSceneChat) {
+        const persistentNotes = await chats.listNotes(input.chatId);
+        if (persistentNotes.length > 0) {
+          const noteLines = persistentNotes
+            .map((n: any) => stripConversationPromptTimestamps(String(n.content ?? "")))
+            .filter((content: string) => content.length > 0)
+            .map((content: string) => `- ${content}`);
+
+          if (noteLines.length > 0) {
+            const noteBlock = [
+              `<conversation_notes>`,
+              chatMode === "game"
+                ? `Durable notes from a connected conversation. These persist across every turn until the user clears them and represent things the players have established as ongoing truth — character knowledge, world facts, recurring dynamics. Use them to inform NPC behavior, world state, and scene framing — don't reference them explicitly as "notes" in the narrative.`
+                : `Durable notes from a connected conversation. These persist across every turn until the user clears them and represent things the character has been told to durably remember about themselves, the user, or the world. Use them to inform behavior, knowledge, and reactions naturally — don't reference them explicitly as "notes" in the narrative.`,
+              ...noteLines,
+              `</conversation_notes>`,
+            ].join("\n");
+
+            // Inject before the last user message (parallel to the influence block)
+            const lastUserIdx = finalMessages.map((m) => m.role).lastIndexOf("user");
+            if (lastUserIdx >= 0) {
+              finalMessages.splice(lastUserIdx, 0, { role: "system" as const, content: noteBlock });
+            } else {
+              finalMessages.push({ role: "system" as const, content: noteBlock });
+            }
           }
         }
       }
@@ -2408,6 +2550,36 @@ export async function generateRoutes(app: FastifyInstance) {
         chatActiveAgentIds.join(","),
         resolvedAgents.map((a) => `${a.type}(${a.phase})`).join(", "),
       );
+
+      const builtInAgentTypes = new Set(BUILT_IN_AGENTS.map((agent) => agent.id));
+      const userMessagesSinceLastAgentRun = async (agentType: string) => {
+        const lastRun = await agentsStore.getLastRunByType(agentType, input.chatId);
+        if (!lastRun) return Number.POSITIVE_INFINITY;
+
+        const lastRunIdx = allChatMessages.findIndex((message: any) => message.id === lastRun.messageId);
+        if (lastRunIdx < 0) return Number.POSITIVE_INFINITY;
+
+        return allChatMessages.slice(lastRunIdx + 1).filter((message: any) => message.role === "user").length;
+      };
+
+      for (let index = resolvedAgents.length - 1; index >= 0; index--) {
+        const agent = resolvedAgents[index]!;
+        if (builtInAgentTypes.has(agent.type)) continue;
+
+        const runInterval = Number(agent.settings.runInterval ?? 0);
+        if (!Number.isFinite(runInterval) || runInterval <= 1) continue;
+
+        const userMessageCount = await userMessagesSinceLastAgentRun(agent.type);
+        if (userMessageCount < runInterval) {
+          logger.debug(
+            "[agents] Skipping custom agent %s until cadence threshold: %d/%d user messages",
+            agent.type,
+            userMessageCount,
+            runInterval,
+          );
+          resolvedAgents.splice(index, 1);
+        }
+      }
 
       // Resolve character info (used for agent context AND prompt fallback)
       const charInfo: Array<{
@@ -2848,7 +3020,9 @@ export async function generateRoutes(app: FastifyInstance) {
         // Persist current position for next turn comparison
         if (currentMapPos && JSON.stringify(lastMapPos) !== JSON.stringify(currentMapPos)) {
           chatMeta.lastMapPosition = currentMapPos;
-          await chats.updateMetadata(input.chatId, chatMeta);
+          const freshChat = await chats.getById(input.chatId);
+          const freshMeta = freshChat ? (parseExtra(freshChat.metadata) as Record<string, unknown>) : chatMeta;
+          await chats.updateMetadata(input.chatId, { ...freshMeta, lastMapPosition: currentMapPos });
         }
 
         // ── Passive perception hints ──
@@ -2963,7 +3137,12 @@ export async function generateRoutes(app: FastifyInstance) {
 
           if (lorebookResult.updatedEntryStateOverrides) {
             chatMeta.entryStateOverrides = lorebookResult.updatedEntryStateOverrides;
-            await chats.updateMetadata(input.chatId, chatMeta);
+            const freshChat = await chats.getById(input.chatId);
+            const freshMeta = freshChat ? (parseExtra(freshChat.metadata) as Record<string, unknown>) : chatMeta;
+            await chats.updateMetadata(input.chatId, {
+              ...freshMeta,
+              entryStateOverrides: lorebookResult.updatedEntryStateOverrides,
+            });
           }
           const loreContent = [lorebookResult.worldInfoBefore, lorebookResult.worldInfoAfter]
             .filter(Boolean)
@@ -3826,8 +4005,15 @@ export async function generateRoutes(app: FastifyInstance) {
       // Tool Resolution (Main Generation + Agent Pipeline)
       // ────────────────────────────────────────
       const inputBody = req.body as Record<string, unknown>;
-      const enableTools = inputBody.enableTools === true || chatMeta.enableTools === true;
+      const enableChatTools = inputBody.enableTools === true || chatMeta.enableTools === true;
+      const enableAgentTools = resolvedAgents.some((agent) => {
+        const agentSettings = typeof agent.settings === "string" ? JSON.parse(agent.settings) : agent.settings || {};
+        return Array.isArray(agentSettings.enabledTools) && agentSettings.enabledTools.length > 0;
+      });
+      const resolveTools = enableChatTools || enableAgentTools;
       let toolDefs: LLMToolDefinition[] | undefined;
+      const allToolDefs: LLMToolDefinition[] = [];
+      const agentOnlyToolNames = new Set(["read_chat_summary", "append_chat_summary"]);
       const customToolDefs: Array<{
         name: string;
         executionType: string;
@@ -3836,7 +4022,7 @@ export async function generateRoutes(app: FastifyInstance) {
         scriptBody: string | null;
       }> = [];
 
-      if (enableTools) {
+      if (resolveTools) {
         // Per-chat tool selection (empty = all tools)
         const chatActiveToolIds: string[] = Array.isArray(chatMeta.activeToolIds)
           ? (chatMeta.activeToolIds as string[])
@@ -3845,11 +4031,7 @@ export async function generateRoutes(app: FastifyInstance) {
         const registeredToolSources = new Map<string, "built-in" | "custom">();
 
         // Built-in tools
-        const builtInFiltered = hasToolFilter
-          ? BUILT_IN_TOOLS.filter((t) => chatActiveToolIds.includes(t.name))
-          : BUILT_IN_TOOLS;
-        toolDefs = [];
-        for (const t of builtInFiltered) {
+        for (const t of BUILT_IN_TOOLS) {
           const existingSource = registeredToolSources.get(t.name);
           if (existingSource) {
             throw new Error(
@@ -3857,7 +4039,7 @@ export async function generateRoutes(app: FastifyInstance) {
             );
           }
           registeredToolSources.set(t.name, "built-in");
-          toolDefs.push({
+          allToolDefs.push({
             type: "function" as const,
             function: {
               name: t.name,
@@ -3869,10 +4051,7 @@ export async function generateRoutes(app: FastifyInstance) {
 
         // Custom tools from DB
         const enabledCustomTools = await customToolsStore.listEnabled();
-        const customFiltered = hasToolFilter
-          ? enabledCustomTools.filter((ct: any) => chatActiveToolIds.includes(ct.name))
-          : enabledCustomTools;
-        for (const ct of customFiltered) {
+        for (const ct of enabledCustomTools) {
           const existingSource = registeredToolSources.get(ct.name);
           if (existingSource) {
             logger.warn(
@@ -3925,7 +4104,7 @@ export async function generateRoutes(app: FastifyInstance) {
               scriptBody: ct.scriptBody,
             });
 
-            toolDefs.push({
+            allToolDefs.push({
               type: "function" as const,
               function: {
                 name: ct.name,
@@ -3943,12 +4122,21 @@ export async function generateRoutes(app: FastifyInstance) {
             );
           }
         }
+
+        if (enableChatTools) {
+          toolDefs = hasToolFilter
+            ? allToolDefs.filter(
+                (td) => chatActiveToolIds.includes(td.function.name) && !agentOnlyToolNames.has(td.function.name),
+              )
+            : allToolDefs.filter((td) => !agentOnlyToolNames.has(td.function.name));
+        }
       }
 
       // ── Spotify Token Refresh (Early) ──
-      const resolvedToolNames = new Set((toolDefs ?? []).map((td) => td.function.name));
+      const resolvedToolNames = new Set(allToolDefs.map((td) => td.function.name));
+      const chatResolvedToolNames = new Set((toolDefs ?? []).map((td) => td.function.name));
       const spotifyToolNames = new Set(DEFAULT_AGENT_TOOLS.spotify ?? []);
-      const chatAllowsSpotify = Array.from(resolvedToolNames).some((name) => spotifyToolNames.has(name));
+      const chatAllowsSpotify = Array.from(chatResolvedToolNames).some((name) => spotifyToolNames.has(name));
       const anyAgentAllowsSpotify = resolvedAgents.some((agent) => {
         const agentSettings = typeof agent.settings === "string" ? JSON.parse(agent.settings) : agent.settings || {};
         const agentEnabledNames = Array.isArray(agentSettings.enabledTools)
@@ -3957,7 +4145,7 @@ export async function generateRoutes(app: FastifyInstance) {
         const agentResolvedNames = agentEnabledNames.filter((name) => resolvedToolNames.has(name));
         return agentResolvedNames.some((name) => spotifyToolNames.has(name));
       });
-      const needsSpotify = enableTools && (chatAllowsSpotify || anyAgentAllowsSpotify);
+      const needsSpotify = (enableChatTools && chatAllowsSpotify) || anyAgentAllowsSpotify;
       // Look beyond resolved agents only to reuse stored Spotify credentials when Spotify tools are allowed.
       const spotifyAgent = needsSpotify
         ? (resolvedAgents.find((a) => a.type === "spotify") ??
@@ -4041,6 +4229,34 @@ export async function generateRoutes(app: FastifyInstance) {
           .slice(0, 20)
           .map((e: any) => ({ name: e.name, content: e.content, tag: e.tag, keys: e.keys as string[] }));
       };
+      const updateChatMetadataForTools = async (patchOrUpdater: MetadataPatchInput) => {
+        let emittedPatch: Record<string, unknown> = {};
+        const updatedChat = await chats.patchMetadata(input.chatId, async (currentMeta) => {
+          const patch =
+            typeof patchOrUpdater === "function" ? await patchOrUpdater({ ...currentMeta }) : patchOrUpdater;
+          emittedPatch = patch;
+          return patch;
+        });
+        const updatedMeta = updatedChat ? parseExtra(updatedChat.metadata) : { ...chatMeta, ...emittedPatch };
+        for (const key of Object.keys(chatMeta)) {
+          if (!(key in updatedMeta)) {
+            delete chatMeta[key];
+          }
+        }
+        Object.assign(chatMeta, updatedMeta);
+        agentContext.chatSummary =
+          typeof chatMeta.summary === "string" && chatMeta.summary.trim() ? chatMeta.summary.trim() : null;
+        trySendSseEvent(reply, { type: "metadata_patch", data: emittedPatch });
+        return updatedMeta;
+      };
+      const baseToolExecutionContext = {
+        gameState: gameState ? (gameState as unknown as Record<string, unknown>) : undefined,
+        customTools: customToolDefs,
+        spotify: spotifyCreds,
+        searchLorebook: searchLorebookForTools,
+        chatMeta,
+        onUpdateMetadata: updateChatMetadataForTools,
+      };
 
       // ── Resolve tool context for all agents ──
       // This enables built-in and custom tools for any agent in the pipeline.
@@ -4053,7 +4269,7 @@ export async function generateRoutes(app: FastifyInstance) {
           : [];
         if (agentEnabledNames.length === 0) continue;
 
-        const agentTools = (toolDefs ?? []).filter((td) => agentEnabledNames.includes(td.function.name));
+        const agentTools = allToolDefs.filter((td) => agentEnabledNames.includes(td.function.name));
         if (agentTools.length === 0) continue;
         const allowedToolNames = new Set(agentTools.map((td) => td.function.name));
 
@@ -4067,9 +4283,7 @@ export async function generateRoutes(app: FastifyInstance) {
               });
             }
             const results = await executeToolCalls([call], {
-              customTools: customToolDefs,
-              spotify: spotifyCreds,
-              searchLorebook: searchLorebookForTools,
+              ...baseToolExecutionContext,
             });
             return results[0]?.result ?? "Tool execution failed";
           },
@@ -4274,6 +4488,25 @@ export async function generateRoutes(app: FastifyInstance) {
         const preGenResults = pipeline.results.filter(
           (r) => r.agentType !== "knowledge-retrieval" && r.agentType !== "knowledge-router",
         );
+        const latestUserMessageForPreGenRun = [...allChatMessages]
+          .reverse()
+          .find((message: any) => message.role === "user");
+        const preGenRunMessageId = latestUserMessageForPreGenRun?.id ?? "";
+        if (preGenRunMessageId) {
+          for (const result of preGenResults) {
+            if (builtInAgentTypes.has(result.agentType)) continue;
+            try {
+              await agentsStore.saveRun({
+                agentConfigId: result.agentId,
+                chatId: input.chatId,
+                messageId: preGenRunMessageId,
+                result,
+              });
+            } catch {
+              // Non-critical — cadence should not block the generation pipeline.
+            }
+          }
+        }
         const criticalFailed = preGenResults.filter((r) => !r.success && r.type === "secret_plot");
         const nonCriticalFailed = preGenResults.filter((r) => !r.success && r.type !== "secret_plot");
         if (criticalFailed.length > 0) {
@@ -4866,7 +5099,7 @@ export async function generateRoutes(app: FastifyInstance) {
             }
           }
 
-          if (enableTools && provider.chatComplete) {
+          if (enableChatTools && provider.chatComplete) {
             const MAX_TOOL_ROUNDS = 5;
             let loopMessages: ChatMessage[] = initialProviderMessages;
             // ── Seed encrypted reasoning cache from DB ──
@@ -4992,23 +5225,23 @@ export async function generateRoutes(app: FastifyInstance) {
                 ...(result.providerMetadata ? { providerMetadata: result.providerMetadata } : {}),
               });
 
-              const permittedToolCalls = result.toolCalls.filter((call) => resolvedToolNames.has(call.function.name));
+              const permittedToolCalls = result.toolCalls.filter((call) =>
+                chatResolvedToolNames.has(call.function.name),
+              );
               const deniedToolResults = result.toolCalls
-                .filter((call) => !resolvedToolNames.has(call.function.name))
+                .filter((call) => !chatResolvedToolNames.has(call.function.name))
                 .map((call) => ({
                   toolCallId: call.id,
                   name: call.function.name,
                   result: JSON.stringify({
                     error: `Tool not allowed in this context: ${call.function.name}`,
-                    allowed: Array.from(resolvedToolNames),
+                    allowed: Array.from(chatResolvedToolNames),
                   }),
                   success: false,
                 }));
 
               const executedToolResults = await executeToolCalls(permittedToolCalls, {
-                customTools: customToolDefs,
-                spotify: spotifyCreds,
-                searchLorebook: searchLorebookForTools,
+                ...baseToolExecutionContext,
               });
               const toolResultsById = new Map(
                 [...executedToolResults, ...deniedToolResults].map((result) => [result.toolCallId, result]),
@@ -5279,8 +5512,19 @@ export async function generateRoutes(app: FastifyInstance) {
             reply.raw.write(`data: ${JSON.stringify({ type: "content_replace", data: fullResponse })}\n\n`);
           }
 
-          // Guard: don't save empty responses — the model returned nothing useful
+          // Guard: don't save empty responses — the model returned nothing useful.
+          // Exception: if the model emitted character commands (e.g. [fetch:...]) with
+          // no surrounding prose, treat the commands as the useful output. Skip saving
+          // a blank assistant bubble but still return the commands so they execute.
           if (!fullResponse.trim() && !input.impersonate) {
+            if (parsedCommands.length > 0) {
+              logger.info(
+                "[generate] Model emitted %d command(s) with no visible prose for chat %s; executing commands without saving a message",
+                parsedCommands.length,
+                input.chatId,
+              );
+              return { savedMsg: null, response: "", commands: parsedCommands, oocMessages, characterId: targetCharId };
+            }
             logger.warn(`[generate] Empty response from model for chat ${input.chatId} (char: ${targetCharId})`);
             reply.raw.write(
               `data: ${JSON.stringify({ type: "error", data: "The AI returned an empty response. Try sending your message again." })}\n\n`,
@@ -5932,7 +6176,16 @@ export async function generateRoutes(app: FastifyInstance) {
               const syncedGameMap = (syncedMeta.gameMap as GameMap | null) ?? null;
               if (syncedGameMap && syncedGameMap !== existingGameMap) {
                 Object.assign(chatMeta, syncedMeta);
-                await chats.updateMetadata(input.chatId, chatMeta);
+                // Re-fetch fresh metadata before write so we don't clobber concurrent updates
+                // (e.g. /game/start flipping gameSessionStatus from "ready" to "active").
+                const freshChat = await chats.getById(input.chatId);
+                const freshMeta = freshChat ? (parseExtra(freshChat.metadata) as Record<string, unknown>) : chatMeta;
+                await chats.updateMetadata(input.chatId, {
+                  ...freshMeta,
+                  gameMap: syncedMeta.gameMap,
+                  gameMaps: syncedMeta.gameMaps,
+                  activeGameMapId: syncedMeta.activeGameMapId,
+                });
                 sendSseEvent(reply, { type: "game_map_update", data: syncedGameMap });
               } else if (getGameMapsFromMeta(syncedMeta).length > 0) {
                 Object.assign(chatMeta, syncedMeta);
@@ -6384,11 +6637,11 @@ export async function generateRoutes(app: FastifyInstance) {
               const csData = result.data as Record<string, unknown>;
               const newText = ((csData.summary as string) ?? "").trim();
               if (newText) {
-                const existingMeta = parseExtra(chat.metadata);
-                const existing = ((existingMeta.summary as string) ?? "").trim();
-                const combined = existing ? `${existing}\n\n${newText}` : newText;
-                const merged = { ...existingMeta, summary: combined };
-                await chats.updateMetadata(input.chatId, merged);
+                const updatedMeta = await updateChatMetadataForTools((currentMeta) => {
+                  const existing = ((currentMeta.summary as string) ?? "").trim();
+                  return { summary: existing ? `${existing}\n\n${newText}` : newText };
+                });
+                const combined = typeof updatedMeta.summary === "string" ? updatedMeta.summary : newText;
                 reply.raw.write(`data: ${JSON.stringify({ type: "chat_summary", data: { summary: combined } })}\n\n`);
               }
             } catch {
@@ -6935,28 +7188,23 @@ export async function generateRoutes(app: FastifyInstance) {
                       conn.openrouterProvider,
                       conn.maxTokensOverride,
                     );
+                    const selfieSystemPrompt = await loadPrompt(
+                      createPromptOverridesStorage(app.db),
+                      CONVERSATION_SELFIE,
+                      {
+                        appearance,
+                        charName,
+                        selfieTagsBlock:
+                          selfieTags.length > 0
+                            ? `\n\nAlways include these tags/modifiers in the prompt: ${selfieTags.join(", ")}`
+                            : "",
+                      },
+                    );
                     const promptResult = await promptBuilder.chatComplete(
                       [
                         {
                           role: "system",
-                          content: [
-                            `You are an image prompt generator. Create a concise, detailed image generation prompt for a selfie photo.`,
-                            `The character's appearance: ${appearance}`,
-                            `Character name: ${charName}`,
-                            ``,
-                            `Generate a prompt that describes a selfie photo of this character. Include:`,
-                            `- Physical appearance details (face, hair, eyes, skin)`,
-                            `- What they're wearing`,
-                            `- Expression and pose (selfie angle)`,
-                            `- Setting/background from context`,
-                            `- Lighting and mood`,
-                            ``,
-                            `Infer the appropriate art style from the character. For example, anime/game characters should use anime/illustration style, realistic characters should use photorealistic style. Match the style to the character's origin.`,
-                            ...(selfieTags.length > 0
-                              ? [``, `Always include these tags/modifiers in the prompt: ${selfieTags.join(", ")}`]
-                              : []),
-                            `Output ONLY the prompt text, nothing else.`,
-                          ].join("\n"),
+                          content: selfieSystemPrompt,
                         },
                         {
                           role: "user",
@@ -7123,6 +7371,23 @@ export async function generateRoutes(app: FastifyInstance) {
                   );
                 } else {
                   logger.warn("[commands] Influence command used but no connected chat");
+                }
+              }
+
+              if (command.type === "note") {
+                // ── Note: persist a durable note in the connected roleplay's prompt ──
+                const noteCmd = command as NoteCommand;
+                const freshChat = await chats.getById(input.chatId);
+                const connectedId = freshChat?.connectedChatId as string | null;
+                if (connectedId) {
+                  const noteContent = stripConversationPromptTimestamps(noteCmd.content);
+                  if (!noteContent) continue;
+                  await chats.createNote(input.chatId, connectedId, noteContent, messageId);
+                  logger.info(
+                    `[commands] Conversation note saved for connected chat ${connectedId}: "${noteContent.slice(0, 80)}..."`,
+                  );
+                } else {
+                  logger.warn("[commands] Note command used but no connected chat");
                 }
               }
 
@@ -7563,8 +7828,12 @@ export async function generateRoutes(app: FastifyInstance) {
                   }
 
                   if (fetchedContent) {
-                    // Persist to chatMeta.mariContext so it's available in subsequent messages
-                    const currentMeta = parseExtra(chat.metadata) as Record<string, unknown>;
+                    // Persist to chatMeta.mariContext so it's available in subsequent messages.
+                    // Re-fetch fresh metadata so concurrent writes (e.g. /game/start) aren't clobbered.
+                    const freshChat = await chats.getById(input.chatId);
+                    const currentMeta = freshChat
+                      ? (parseExtra(freshChat.metadata) as Record<string, unknown>)
+                      : (parseExtra(chat.metadata) as Record<string, unknown>);
                     const mariContext = (currentMeta.mariContext as Record<string, string>) ?? {};
                     mariContext[contextKey] = fetchedContent;
                     currentMeta.mariContext = mariContext;

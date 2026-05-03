@@ -17,7 +17,10 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 - Pygmalion, Jenny, and DataCat added to the Browser.
 - Pinnable taskbar shortcut via custom launcher.
 - Universal Tool Support for agents.
+- Custom agents can now maintain durable chat memory with read/append summary tools, metadata patch streaming, and configurable trigger cadence.
+- Prompt override APIs can now customize image-generation templates for sprites, NPC portraits, backgrounds, scene illustrations, and conversation selfies.
 - New Knowledge Router agent.
+- Active filter in the Lorebooks panel for lorebooks currently relevant to the selected chat.
 - You can now link Personas to Lorebooks.
 - Drag-and-drop Lorebook entries.
 - Added ElevenLabs for TTS support.
@@ -28,6 +31,10 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 - Added the `/impersonate_prompt` command that allows you to change the impersonate prompt.
 - Added manual mode in Conversations that only makes the character respond when you ping them with `@name`.
 - Resizing sprites in game mode.
+- Conversation auto-summarization now has a Day Rollover Hour (so a late-night session doesn't get cut in half when calendar midnight passes) and a Recent Message Tail (keeps the last N messages verbatim across the day boundary so characters wake up remembering the actual flow of last night, not just the gist). Defaults: 4 AM rollover, 10-message tail.
+- Conversation characters can now emit durable `<note>...</note>` tags for connected roleplay and game chats. Notes persist in the target chat's prompt until cleared from Chat Settings.
+- Lorebook entries now use compact rows with inline controls and an expandable inline editor.
+- Lorebook entries can now be grouped into collapsible folders to reduce vertical clutter for stable or AI-managed entries. Folders have their own enable/disable toggle that gates every entry inside (regardless of each entry's own toggle) without modifying the entries' individual settings, so re-enabling a folder restores everything to how it was. Each folder is its own container — sort by Order works inside the folder, and a folder full of high-Order entries can sit above root-level entries with low Order without conflict. Move entries between folders via a per-row folder picker or drag-and-drop. Collapse state is per-browser (localStorage). Folders are flat in this release; nesting may follow.
 
 ### Fixed
 
@@ -56,6 +63,7 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 - Minor adjustments to some agent widgets.
 - Game mode now supports multiple maps.
 - Debug mode restored.
+- Expression Engine retries now load available sprites, validate returned expressions, and persist the corrected sprite state.
 
 ## [1.5.5]
 
