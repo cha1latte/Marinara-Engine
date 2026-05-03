@@ -214,28 +214,11 @@ Game Mode is more demanding than Conversation or Roleplay because of world-gen: 
 - **Opus** tends toward dramatic openings (`In the year of our forsaken reckoning...`). If that bothers you, prompt against it in Additional Preferences.
 - **GLM5** trends toward player-positive narration regardless of Tone (see [Tone](#tone) above).
 
-## Recommended starting settings
+## Generation parameters
 
-Marinara doesn't ship Game-Mode-specific sampler defaults. When you open the wizard, the GM connection's generation parameters start from the engine's roleplay defaults:
+Game Mode uses Marinara's shared generation parameter system. See [Generation Parameters](GENERATION_PARAMETERS.md) for the full defaults table, tuning advice, and per-backend gotchas (Claude `temperature`/`topP` conflict, Claude thinking mode, OpenRouter caveats).
 
-| Parameter          | Default   | Notes                                                                                |
-| ------------------ | --------- | ------------------------------------------------------------------------------------ |
-| `temperature`      | `1`       | Higher = more variety; lower = more deterministic. See Claude note below.            |
-| `maxTokens`        | `8192`    | Cap on response length. Raise if world-gen responses get truncated.                  |
-| `topP`             | `1`       | See Claude note below.                                                               |
-| `topK`             | `0`       | Disabled; most providers ignore it.                                                  |
-| `frequencyPenalty` | `0`       |                                                                                      |
-| `presencePenalty`  | `0`       |                                                                                      |
-| `reasoningEffort`  | `maximum` | Used by reasoning-capable models.                                                    |
-| `verbosity`        | `high`    | Used by GPT-5-family models.                                                         |
-
-These work as a starting point — tune from there. If world-gen output feels stilted or repetitive, raise temperature slightly. If it feels chaotic or off-task, lower it. For ongoing turns, somewhere in the 0.8–1.0 range tends to feel balanced — but this is rule of thumb, not a tested recommendation.
-
-**Per-backend gotchas:**
-
-- **Claude (any provider)** — do **not** set both `temperature` and `topP`. The API rejects with `Bad Request: temperature and top_p cannot both be specified for this model`. Leave one of them unset.
-- **Claude thinking mode** — `temperature`, `topP`, `presencePenalty`, and `frequencyPenalty` are all ignored. Output is shaped by reasoning budget, not sampler tuning. To change behavior, change prompt or model rather than these knobs.
-- **OpenRouter** — sampler behavior depends on the underlying model your route resolves to. Pinning a specific model keeps things predictable.
+For Game Mode specifically, raise `maxTokens` to at least `10000` if world-gen JSON gets truncated — the structured output is large.
 
 ## Optional toggles
 
