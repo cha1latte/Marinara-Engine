@@ -106,6 +106,22 @@ Dropdown of 10 supported languages: English, Japanese, Korean, Chinese, Spanish,
 
 All in-game text — narration, dialogue, NPC names, journal entries — is generated in the selected language.
 
+## Using lorebooks for richer world setup
+
+The wizard's **Party & GM** step lets you attach one or more lorebooks to your game. This is a powerful complement to the entry fields above when you want to play in a specific established setting — your own homebrew world, a fan adaptation, a setting you've built up across previous campaigns — and giving the GM a paragraph in **Setting** isn't enough.
+
+### How it works during world-gen
+
+When you click Start, the engine pulls the **constant** entries from your attached lorebooks and feeds them to the model as canonical facts. The setup prompt wraps them with the instruction `Selected constant lorebook canon that MUST be treated as true for this world`. The model uses them when generating the world overview, story arc, NPCs, plot twists, and starting map.
+
+Only constant entries fire during world-gen because there's no chat text yet for keyword triggers to match against. Keyword-triggered entries activate later, during gameplay turns, once player input contains their trigger words.
+
+### Practical tips
+
+- For world-gen, only mark entries as **constant** if you want them baked into the initial world. Trigger-only entries won't fire until gameplay starts.
+- Keep the constant set lean. Constant entries add to your context budget on every world-gen call and every gameplay turn. Major setting facts, key locations, recurring factions: yes. Every minor NPC and item: probably no — let those trigger by name during gameplay.
+- You can use Claude or another LLM to draft a lorebook from existing source material — paste in a wiki page or your campaign notes and ask for structured entries with sensible keywords. This is currently one of the fastest ways to bootstrap a rich setting.
+
 ## GM character
 
 The **Party & GM** step in the wizard lets you pick one of two **GM modes**:
