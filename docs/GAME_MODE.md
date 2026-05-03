@@ -4,7 +4,7 @@ Game Mode is one of Marinara Engine's chat modes, alongside Conversation, Rolepl
 
 This guide is a getting-started reference. It covers how Game Mode works under the hood, how to fill out the setup wizard, what makes a good GM character card, what models and settings tend to give the best experience, and how to fix the most common failures. If you're brand new and just want to start a game, jump to [Setting up a game](#setting-up-a-game).
 
-**What this guide does not cover:** in-game combat mechanics and dice rolls, NPC and party management during play, save/resume behavior, regenerating a world after world-gen, and other advanced workflows. Ask in the Marinara Discord (or open a GitHub issue) for help with those for now.
+**What this guide does not cover:** deep in-game combat mechanics, NPC and party management during play, save/resume behavior, regenerating a world after world-gen, and other advanced workflows. Ask in the Marinara Discord (or open a GitHub issue) for help with those for now.
 
 ## Is Game Mode right for you?
 
@@ -132,6 +132,26 @@ Only constant entries fire during world-gen because there's no chat text yet for
 - Keep the constant set lean. Constant entries add to your context budget on every world-gen call and every gameplay turn. Major setting facts, key locations, recurring factions: yes. Every minor NPC and item: probably no — let those trigger by name during gameplay.
 - You can use Claude or another LLM to draft a lorebook from existing source material — paste in a wiki page or your campaign notes and ask for structured entries with sensible keywords. This is currently one of the fastest ways to bootstrap a rich setting.
 
+## Playing the game
+
+Once setup completes, you'll be in the gameplay UI. A couple of input controls are worth knowing about up front because they aren't obvious.
+
+### Address modes: who you're talking to
+
+The input bar has a small chat-bubble icon (next to the dice button) that toggles **who your message is addressed to**. Three modes:
+
+- **Scene** (default) — your message becomes a normal in-game action or dialogue line. The GM and party respond.
+- **Talk to Party** — prefixes your message with `[To the party]` and routes the response through the **Party Players agent**, which speaks as your party members. Useful for tactical conferences ("OK team, what should we do here?") or in-character conversation between you and your party. Only available when your party isn't empty.
+- **Talk to GM** — prefixes your message with `[To the GM]`. The GM responds out-of-character. Useful for asking clarifying questions ("does my character know about the temple?"), requesting pacing changes ("can we slow down this scene?"), or seeding something into the world.
+
+The active mode is color-coded — sky for party, amber for GM. Toggle once to enter a non-default mode; toggle again to return to Scene.
+
+### Rolling dice
+
+The 🎲 button in the input bar opens a quick-dice menu. Eight preset notations are one click away: `d20`, `d6`, `2d6`, `d10`, `d100`, `d4`, `d8`, `d12`. You can also type custom notation like `3d8+2` and add it.
+
+A picked roll is **queued** rather than sent immediately — a badge appears in the input bar showing the queued roll. When you send your next message, the roll is resolved server-side first (standard JavaScript PRNG, fresh per roll), the result is appended to your message as `[dice: 2d6 = 9 (4,5)]`, and the GM treats it as canonical truth. The GM is explicitly instructed not to recalculate or contradict the result.
+
 ## GM character
 
 The **Party & GM** step in the wizard lets you pick one of two **GM modes**:
@@ -156,6 +176,20 @@ The Marinara community hasn't published a definitive guide on this, so the follo
 - **Model choice still dominates tone.** A card written for a grim narrator paired with a player-positive model will still narrate cheerfully. Plan to compensate via Additional Preferences or pick a model whose tendencies match the card.
 
 The engine doesn't ship a default or example GM card, and the community hasn't published a canonical one yet. Your starting point is either your existing character library or a fresh card built from scratch. **If you've authored a GM card you're happy with, share it in the Marinara Discord** — we'd like to link or include community-validated examples here in a future revision.
+
+## Party characters
+
+The wizard's **Party & GM** step also lets you pick one or more characters from your library as your party — the companions who travel with you and act under the GM's narrative jurisdiction during scenes. Each party slot expects **one character per card**.
+
+### What works well as a party card
+
+- A standard character card with **name, description, personality, and a clear voice**. The same fields you'd use for a Roleplay or Conversation card work here.
+- **One character per card.** Even if your library has a "complete adventuring party" written as a single card, the engine treats that whole card as one entity — the Party Players agent wraps each card in a single `<party_member>` block, so a multi-character card gets lumped together and loses individual voice. Split compound cards into individual character cards before adding them to a party.
+- Cards that capture *how the character speaks and reacts* more than ones full of plot lore. World-gen produces its own world and story; the card brings the party member's voice to it.
+
+### Persona cards
+
+Your **persona** — the character you yourself play, picked in the **You & Model** step — is treated as a distinct slot in the prompt. The engine separates `personaCard` (who you are) from `partyCards` (who you're with). Don't put your own character in the party slot, and don't pick a party member as your persona — they're routed differently in the prompt and you'll end up confusing the model.
 
 ## Recommended models
 
@@ -229,6 +263,22 @@ Generates NPC portraits, location backgrounds, and inventory imagery via your se
 **Important: Game Mode's layout is designed around having visuals.** It uses a visual-novel-style presentation with backgrounds and sprite slots. With Image Generation off, you still get the narrative, state tracking, and combat mechanics — but the visual chrome that the layout was built around stays empty or placeholder. If you can't run Image Generation (no provider that supports it, or unwilling to pay for the per-turn image calls), it's worth knowing this up front so the empty visuals aren't a surprise. See also [Is Game Mode right for you?](#is-game-mode-right-for-you) above.
 
 This toggle adds the most cost per turn — one or more image API calls each time the scene changes. If you do enable it, expect a meaningful per-session cost increase compared to running without.
+
+## The `game-assets` folder
+
+The engine stores game-related media in `packages/server/data/game-assets/` relative to your install. Subfolders are organized by category:
+
+- `music/` — `exploration`, `combat`, `dialogue`, `travel_rest`
+- `sfx/` — `ui`, `combat`, `exploration`
+- `ambient/` — `nature`, `urban`, `interior`
+- `sprites/` — `generic-fantasy`, `generic-scifi`
+- `backgrounds/` — `fantasy`, `scifi`, `modern`, `illustrations`
+
+A `manifest.json` is auto-generated on startup (and again whenever you upload). It maps tags like `backgrounds:fantasy:dark-forest` to specific files. The GM model receives a condensed tag list at generation time and references assets by tag.
+
+You can upload custom files — including custom sprites — via the Game Assets upload endpoint or its Settings UI. An uploaded sprite tagged `sprites:generic-fantasy:custom-npc` becomes available for the engine to choose. Built-in assets take precedence on tag collisions; user uploads land under a `:user:` namespace.
+
+Generated NPC portraits (when Image Generation is on) are stored separately under `data/avatars/npc/<chatId>/`, not in `game-assets/`.
 
 ## Troubleshooting
 
