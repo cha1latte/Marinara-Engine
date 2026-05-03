@@ -6,6 +6,16 @@ This guide is a getting-started reference. It covers how Game Mode works under t
 
 **What this guide does not cover:** in-game combat mechanics and dice rolls, NPC and party management during play, save/resume behavior, regenerating a world after world-gen, and other advanced workflows. Ask in the Marinara Discord (or open a GitHub issue) for help with those for now.
 
+## Is Game Mode right for you?
+
+Game Mode delivers the most when you have:
+
+- **A capable model on a paid connection.** Free-tier routing typically can't handle world-gen reliably (see [Recommended models](#recommended-models)).
+- **A working Image Generation connection, or willingness to pay for one.** The layout is designed around having visuals (see [Image Generation](#image-generation)).
+- **An interest in structured RPG mechanics** — party management, quests, combat, dice, scene state — rather than open-ended freeform narrative.
+
+If those don't all apply — for example, you're on a free or slow connection, you don't want to run image generation, or you'd rather have a more flexible narrative experience — Marinara's other modes (Conversation or Roleplay) may be a better fit. You can always come back to Game Mode later when your setup matches what it's optimized for.
+
 ## How Game Mode works
 
 Game Mode runs in two distinct phases.
@@ -216,9 +226,17 @@ If you've downloaded Marinara's local sidecar model, you can route Scene Analysi
 
 Generates NPC portraits, location backgrounds, and inventory imagery via your selected Image Generation connection (Stability AI, ComfyUI, AUTOMATIC1111, etc.). Uses the `artStylePrompt` from world-gen to keep visuals consistent within a game.
 
-This is the toggle that adds the most cost per turn (one or more image API calls each time the scene changes). For a first session, leave it off and turn it on once you're comfortable with the rest of the system.
+**Important: Game Mode's layout is designed around having visuals.** It uses a visual-novel-style presentation with backgrounds and sprite slots. With Image Generation off, you still get the narrative, state tracking, and combat mechanics — but the visual chrome that the layout was built around stays empty or placeholder. If you can't run Image Generation (no provider that supports it, or unwilling to pay for the per-turn image calls), it's worth knowing this up front so the empty visuals aren't a surprise. See also [Is Game Mode right for you?](#is-game-mode-right-for-you) above.
+
+This toggle adds the most cost per turn — one or more image API calls each time the scene changes. If you do enable it, expect a meaningful per-session cost increase compared to running without.
 
 ## Troubleshooting
+
+### How do I see what calls Game Mode is actually making?
+
+Set `LOG_LEVEL=debug` in your `.env` file and restart the server. Marinara will log complete LLM prompts (every message role and content), full responses, token counts, generation timing, agent pipeline details, and game state patches. This is especially useful in Game Mode, where the per-turn prompt is large and assembled from many sources — debug logging is the only way to see exactly what context the model is receiving and how many tokens you're spending on each call.
+
+Set it back to `warn` (the default) when you're done — debug output is high-volume and floods the terminal. See [Logging Levels](CONFIGURATION.md#logging-levels) for full details.
 
 ### World-gen fails immediately with a JSON / 422 error
 
