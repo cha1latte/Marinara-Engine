@@ -151,14 +151,14 @@ Set it back to `warn` (the default) when you're done — debug output is high-vo
 
 ### Autonomous messages are spamming me
 
-Open the chat settings drawer and turn off **Autonomous messages**. They're off by default; if you turned them on and the character is messaging too aggressively, you can also reshape their schedule to mark more hours `dnd` or `offline`, which suppresses autonomous reach-outs during those windows.
+Open the chat settings drawer and turn off **Autonomous messages**. They default to ON when you complete the quick-setup modal, so this is a common adjustment. If the character is messaging more aggressively than you'd like, you can also reshape their schedule to mark more hours `dnd` or `offline`, which suppresses autonomous reach-outs during those windows.
 
 ### Group chat: one character monopolizes responses
 
 Two options:
 
-- Switch **Response ordering** to `manual` and pick characters explicitly each turn.
-- If staying on `automatic`, edit the dominant character's schedule to mark them `dnd` or `offline` more often. The Response Orchestrator weighs schedules.
+- Turn on **Manual Replies** ("Only Reply When Mentioned") in the chat settings drawer and `@mention` characters explicitly when you want them to speak.
+- Or use the **character picker** that appears in the input bar to trigger specific characters' responses one at a time without enabling Manual Replies globally.
 
 ### Character forgets things from earlier in the conversation
 

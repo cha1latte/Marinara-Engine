@@ -83,7 +83,7 @@ Key behaviors:
 
 - **Scenes are self-contained.** They do NOT auto-pull context from a connected Conversation, even if the parent roleplay does. This keeps scenes focused on their own narrative.
 - **Scenes can be created** mid-roleplay via the scene-creation API/UI. Fork modes include forking from the current message, branching from a prior message, or continuing as a new scene.
-- **Scenes are concluded or abandoned** explicitly when you're done — the engine tracks their status. Concluded scenes can be referenced/summarized back into the main roleplay.
+- **Scenes are concluded or abandoned** explicitly when you're done — the engine tracks their status. After conclusion, the parent roleplay continues from where you left it before the scene was forked.
 
 The scene system enables narrative branching without losing the canonical thread.
 
