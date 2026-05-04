@@ -149,6 +149,8 @@ Set `LOG_LEVEL=debug` in your `.env` file and restart the server. Marinara logs 
 
 Set it back to `warn` (the default) when you're done — debug output is high-volume. See [Logging Levels](CONFIGURATION.md#logging-levels) for full details.
 
+**Privacy note before sharing logs:** debug output contains your full prompts — character cards, persona content, lorebook entries, and chat history. Redact private content (NSFW, real-world identifiers, anything you wouldn't want public) before posting logs in Discord, GitHub issues, or any public forum.
+
 ### Autonomous messages are spamming me
 
 Open the chat settings drawer and turn off **Autonomous messages**. They default to ON when you complete the quick-setup modal, so this is a common adjustment. If the character is messaging more aggressively than you'd like, you can also reshape their schedule to mark more hours `dnd` or `offline`, which suppresses autonomous reach-outs during those windows.

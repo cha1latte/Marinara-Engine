@@ -305,13 +305,15 @@ Set `LOG_LEVEL=debug` in your `.env` file and restart the server. Marinara will 
 
 Set it back to `warn` (the default) when you're done — debug output is high-volume and floods the terminal. See [Logging Levels](CONFIGURATION.md#logging-levels) for full details.
 
+**Privacy note before sharing logs:** debug output contains your full prompts — character cards, persona content, lorebook entries, chat history, world-state, and any sensitive in-world material. Redact private content (NSFW, real-world identifiers, private campaign details) before posting logs in Discord, GitHub issues, or any public forum.
+
 ### World-gen fails immediately with a JSON / 422 error
 
 Most common cause: the GM model can't produce the full structured JSON. Try in order:
 
 1. Check what connection your GM model is using. If you're using the auto-seeded `OpenRouter Free` connection (which uses model `openrouter/free`), this is almost certainly your problem — free-tier routing usually can't handle world-gen. Switch to a top-tier model on a paid connection (see [Recommended models](#recommended-models)).
 2. Retry. Some failures are transient — the same prompt works the second time.
-3. If you're on `openrouter/auto` or any auto-routing model, switch to a pinned capable model.
+3. If you're on `openrouter/auto` or any auto-routing model, switch to a pinned, capable model.
 4. Shorten Setting and Additional Preferences if they are very long — large inputs leave less budget for the strict-JSON output.
 
 ### `Bad Request: temperature and top_p cannot both be specified`

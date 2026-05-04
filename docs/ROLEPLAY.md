@@ -173,6 +173,8 @@ Set `LOG_LEVEL=debug` in your `.env` file and restart the server. Marinara logs 
 
 Set it back to `warn` (the default) when you're done — debug output is high-volume. See [Logging Levels](CONFIGURATION.md#logging-levels) for full details.
 
+**Privacy note before sharing logs:** debug output contains your full prompts — character cards, persona content, lorebook entries, chat history, and world-state details. Redact private content (NSFW, real-world identifiers, private campaign material) before posting logs in Discord, GitHub issues, or any public forum.
+
 ### HUD widgets keep going wrong (wrong time, wrong location, wrong inventory)
 
 The widgets are populated by the World-State agent. If values drift:
