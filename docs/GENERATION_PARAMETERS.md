@@ -33,12 +33,12 @@ What every new preset starts from:
 
 ### Wizard customization starting points
 
-When you toggle **Customize generation parameters** in the chat setup wizard, the editor pre-fills slightly different starting values depending on the mode (defined in `packages/client/src/components/ui/GenerationParametersEditor.tsx`):
+When you toggle **Customize generation parameters** in the chat setup wizard, the editor prefills slightly different starting values depending on the mode (defined in `packages/client/src/components/ui/GenerationParametersEditor.tsx`):
 
 - **`CHAT_PARAMETER_DEFAULTS`** (Conversation wizard): differs from the baseline by setting `reasoningEffort: "maximum"` and `verbosity: "high"`.
 - **`ROLEPLAY_PARAMETER_DEFAULTS`** (Roleplay / Visual Novel / Game wizards): same as `CHAT_PARAMETER_DEFAULTS` except `maxTokens` is `8192` instead of `4096`, since these modes typically render richer narrative output.
 
-These wizard defaults only matter if you actually enable the customization toggle — they pre-fill the editor. If you leave the toggle off, no per-chat override is saved and the connection's existing parameters apply.
+These wizard defaults only matter if you actually enable the customization toggle — they prefill the editor. If you leave the toggle off, no per-chat override is saved and the connection's existing parameters apply.
 
 ## Tuning
 
