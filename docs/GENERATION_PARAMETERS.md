@@ -6,22 +6,39 @@ This is the canonical reference. Mode-specific guides reference this doc rather 
 
 ## Defaults
 
-Marinara ships **two built-in default sets**, picked automatically based on which mode you're setting up. Both are defined in `packages/client/src/components/ui/GenerationParametersEditor.tsx`.
+Generation parameters are **layered**. The effective parameters for a chat at runtime come from (in order of increasing precedence):
 
-| Parameter          | `CHAT_PARAMETER_DEFAULTS` (Conversation) | `ROLEPLAY_PARAMETER_DEFAULTS` (Roleplay / VN / Game) | Notes                                                                                                                                |
-| ------------------ | ---------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `temperature`      | `1`                                      | `1`                                                  | Higher = more variety; lower = more deterministic. See Claude note below.                                                            |
-| `maxTokens`        | `4096`                                   | `8192`                                               | Cap on response length. Game Mode world-gen in particular benefits from `10000` or higher because the structured JSON output is large. |
-| `topP`             | `1`                                      | `1`                                                  | See Claude note below.                                                                                                               |
-| `topK`             | `0`                                      | `0`                                                  | Disabled; most providers ignore it anyway.                                                                                           |
-| `frequencyPenalty` | `0`                                      | `0`                                                  |                                                                                                                                      |
-| `presencePenalty`  | `0`                                      | `0`                                                  |                                                                                                                                      |
-| `reasoningEffort`  | `maximum`                                | `maximum`                                            | Used by reasoning-capable models (Claude with extended thinking, OpenAI o-series). Ignored on non-reasoning models.                  |
-| `verbosity`        | `high`                                   | `high`                                               | Used by GPT-5-family models. Ignored elsewhere.                                                                                      |
-| `assistantPrefill` | `""` (empty)                             | `""` (empty)                                         | Optional text to prefill into the assistant's response. Most users leave empty.                                                      |
-| `customParameters` | `{}` (empty)                             | `{}` (empty)                                         | Provider-specific overrides for parameters Marinara doesn't expose by default. Most users leave empty.                               |
+1. **The preset attached to the chat.** New presets start from a shared baseline, `DEFAULT_GENERATION_PARAMS` in `packages/shared/src/constants/defaults.ts`.
+2. **The connection's `defaultParameters`**, settable when editing a connection.
+3. **Per-chat overrides**, settable in the chat's settings drawer or via the wizard's "Customize generation parameters" toggle.
 
-The two sets are identical except for `maxTokens` — Conversation defaults are tuned for shorter chat replies (4,096), while Roleplay / VN / Game default to longer outputs (8,192) because they render richer narrative content. Both work as a starting point; tune from there.
+### Preset baseline (`DEFAULT_GENERATION_PARAMS`)
+
+What every new preset starts from:
+
+| Parameter          | Default  | Notes                                                                                                                                |
+| ------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `temperature`      | `1`      | Higher = more variety; lower = more deterministic. See Claude notes below.                                                           |
+| `maxTokens`        | `4096`   | Cap on response length. Game Mode world-gen in particular benefits from `10000` or higher because the structured JSON output is large. |
+| `topP`             | `1`      | See Claude notes below.                                                                                                              |
+| `topK`             | `0`      | Disabled; most providers ignore it anyway.                                                                                           |
+| `minP`             | `0`      | Disabled.                                                                                                                            |
+| `frequencyPenalty` | `0`      |                                                                                                                                      |
+| `presencePenalty`  | `0`      |                                                                                                                                      |
+| `reasoningEffort`  | `null`   | When set, used by reasoning-capable models (Claude with extended thinking, OpenAI o-series). `null` = provider default.              |
+| `verbosity`        | `null`   | When set, used by GPT-5-family models. `null` = provider default.                                                                    |
+| `assistantPrefill` | `""`     | Optional text to prefill into the assistant's response. Most users leave empty.                                                      |
+| `customParameters` | `{}`     | Provider-specific overrides for parameters Marinara doesn't expose by default.                                                       |
+| `maxContext`       | `128000` | Max context window in tokens. Connections typically override this with their actual model's context window.                          |
+
+### Wizard customization starting points
+
+When you toggle **Customize generation parameters** in the chat setup wizard, the editor pre-fills slightly different starting values depending on the mode (defined in `packages/client/src/components/ui/GenerationParametersEditor.tsx`):
+
+- **`CHAT_PARAMETER_DEFAULTS`** (Conversation wizard): differs from the baseline by setting `reasoningEffort: "maximum"` and `verbosity: "high"`.
+- **`ROLEPLAY_PARAMETER_DEFAULTS`** (Roleplay / Visual Novel / Game wizards): same as `CHAT_PARAMETER_DEFAULTS` except `maxTokens` is `8192` instead of `4096`, since these modes typically render richer narrative output.
+
+These wizard defaults only matter if you actually enable the customization toggle — they pre-fill the editor. If you leave the toggle off, no per-chat override is saved and the connection's existing parameters apply.
 
 ## Tuning
 
@@ -36,9 +53,11 @@ For ongoing chat or roleplay turns, `temperature` somewhere in the `0.8`–`1.0`
 
 ## Per-backend gotchas
 
-- **Claude (any provider — Anthropic, AWS Bedrock, etc.)** — do **not** set both `temperature` and `topP`. The API rejects the request with `Bad Request: temperature and top_p cannot both be specified for this model`. Leave one of them unset (not at its default — actually unset). Save and retry.
+- **Claude via OpenRouter or an OpenAI-compatible endpoint** — Claude's API rejects requests that set both `temperature` and `topP` with `Bad Request: temperature and top_p cannot both be specified for this model`. The OpenAI-compatible provider sends both fields when both are set, so on these routes you must leave one of `temperature` and `topP` unset (not at its default value — actually unset). Save and retry.
 
-- **Claude thinking mode** — when extended thinking is enabled, `temperature`, `topP`, `presencePenalty`, and `frequencyPenalty` are all ignored. Output is shaped by reasoning budget, not sampler tuning. To change behavior, change the prompt or the model rather than these knobs. `reasoningEffort` and `maxTokens` still apply.
+- **Claude direct (Anthropic provider)** — Marinara's Anthropic provider doesn't include `top_p` in its requests at all, so the temperature/top_p conflict above doesn't arise on this route. For **Opus 4.7+** models specifically, the provider also strips `temperature` and `top_k` from the request because those models reject sampling parameters entirely — the sliders in the UI exist but have no effect when the underlying model is Opus 4.7+.
+
+- **Claude thinking mode** — when extended thinking is enabled, the engine strips `temperature` from the request to satisfy Claude's constraint that sampler params can't combine with extended thinking. `presencePenalty` and `frequencyPenalty` aren't native Claude sampling parameters and don't typically have effect on Claude. Output behavior is shaped primarily by `reasoningEffort` and model choice; tuning samplers in this configuration may produce no observable change.
 
 - **OpenRouter** — sampler behavior depends on the underlying model your route resolves to. If you're using `openrouter/auto`, `openrouter/free`, or any other auto-routing model, your sampler settings may behave inconsistently between calls because the underlying model can change. Pinning a specific model keeps behavior predictable.
 
