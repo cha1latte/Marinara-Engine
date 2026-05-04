@@ -12,9 +12,9 @@ Game Mode delivers the most when you have:
 
 - **A capable model on a paid connection.** Free-tier routing typically can't handle world-gen reliably (see [Recommended models](#recommended-models)).
 - **A working Image Generation connection, or willingness to pay for one.** The layout is designed around having visuals (see [Image Generation](#image-generation)).
-- **An interest in structured RPG mechanics** — party management, quests, combat, dice, scene state — rather than open-ended freeform narrative.
+- **An interest in playing through a story with persistent world state** — the engine tracks characters, NPCs, locations, time, weather, and quests across turns. You don't have to engage with every RPG mechanic; some users skip combat and dice entirely and use Game Mode for narrative-driven, visual-novel-style play. The structural elements are available when you want them.
 
-If those don't all apply — for example, you're on a free or slow connection, you don't want to run image generation, or you'd rather have a more flexible narrative experience — Marinara's other modes (Conversation or Roleplay) may be a better fit. You can always come back to Game Mode later when your setup matches what it's optimized for.
+If the first two don't apply — you're on a free or slow connection, or you don't want to run image generation — Marinara's other modes (Conversation or Roleplay) may be a better fit. You can always come back to Game Mode later when your setup matches what it's optimized for.
 
 ## How Game Mode works
 
@@ -55,6 +55,40 @@ Once the world is generated, each turn assembles a fresh prompt that includes:
 The model returns narration, dialogue, scene description, and any state changes (combat results, map updates, NPC reactions). If you have **Scene Analysis** or **Image Generation** enabled, those run on a separate sidecar connection afterward to add backgrounds, music, sprite expressions, and HUD widget updates — see [Optional toggles](#optional-toggles).
 
 Because the prompt assembled per turn is rich, Game Mode handles long-term coherence reasonably well. It also means you're paying for a lot of context per call, so a model that handles long context cleanly is a better fit than one that doesn't.
+
+### Sessions: ending and starting new ones
+
+Within a single Game Mode game, you can play across multiple **sessions** — long-running play threads similar to how a tabletop group might split a campaign across multiple play nights. Sessions have explicit lifecycle hooks that are neither normal gameplay turns nor world-gen, but a third kind of LLM call:
+
+**Ending a session** is triggered either by you clicking **End Session** or by the GM emitting an `[session_end: reason="..."]` tag inline when narrative warrants it. The engine runs a single LLM call to your GM connection that's structurally distinct from a gameplay turn:
+
+- Lower temperature (`0.45` vs. `~1.0` for gameplay) — more deterministic structured output
+- Input: the full session transcript plus the journal and current game state
+- Output: a JSON payload containing
+  - **summary** — narrative recap of what happened this session
+  - **resumePoint** — short paragraph stating where the next session should pick up
+  - Updated **story arc**, **plot twists**, and **party arcs** if narrative beats warrant
+  - Updated **party character cards** if characters earned abilities, changed class, etc.
+  - Updated **morale**
+
+This is closer to world-gen in shape (structured JSON output) than to a gameplay turn, but it operates on existing state instead of generating from scratch. The resulting summary becomes part of every subsequent session's prompt context (it's what shows up under "session summaries from previous play sessions" in [Phase 2](#phase-2-gameplay-turn-by-turn)).
+
+**Starting a new session** happens when you click **New Session** on a concluded game. The engine:
+
+- Creates a new chat numbered sequentially (Session 2, Session 3, etc.) forked from the previous session
+- Runs an LLM call to generate a **recap message** anchored on the previous session's `resumePoint`
+- Carries forward the game state — map, NPCs, party, quests, time, weather, journal
+- Posts the recap as the new session's first message
+
+The recap call is also distinct from a gameplay turn — its job is purely to bridge two narratives. It's smaller in scope than session-end's structured update.
+
+In summary:
+
+- **Gameplay turns** = ongoing narration, lots of state injected, narrative output
+- **End Session** = retrospective JSON summary + state updates (closer to world-gen in structure, operates on existing state)
+- **Start Session** = bridging recap that anchors the next session on the resumePoint
+
+The lifecycle is designed so you can run long-running games across multiple play sessions without overwhelming the model's context window — older session details get compressed into summaries, and only the most recent narrative stays in full fidelity.
 
 ## Setting up a game
 
