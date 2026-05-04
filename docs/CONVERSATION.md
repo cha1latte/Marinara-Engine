@@ -19,46 +19,42 @@ Pick Roleplay or Game Mode instead if you want immersive scene presentation (spr
 
 ## Setting up a chat
 
-When you start a new Conversation chat, you can either run through the setup wizard or skip it and start chatting immediately. Configuration is also editable any time via the chat settings drawer.
+When you start a new Conversation chat, a Discord-style **quick-setup modal** appears. Unlike Roleplay's multi-step wizard, Conversation's setup is a single-screen panel that lets you configure the essentials and start chatting in seconds. You can also dismiss the modal and configure later via the chat settings drawer.
 
-The wizard has five steps, all optional except picking a connection:
+The quick setup has these controls:
 
-1. **Connection** — which LLM provider/model the chat sends messages to. Required.
-2. **Preset** — a saved prompt-stack template (system prompt, instructions, formatting rules). Optional; the engine ships a sensible default.
-3. **Persona** — the character *you* play, if you want to be more than a generic user. Optional.
-4. **Character(s)** — pick one or more characters from your library. One = 1:1 chat. More than one = group chat.
-5. **Lorebooks** — attach lorebooks to inject world facts and lore-specific context as the chat unfolds. Optional.
+- **Connection** (required) — which LLM provider/model the chat sends messages to.
+- **Persona** (optional) — the character *you* play, if you want to be more than a generic user.
+- **Character(s)** — tap to add one or more characters from your library. One = 1:1 chat. More than one = group chat. The chat name auto-generates from the picked characters' names unless you've renamed it.
+- **Autonomous messages toggle** — defaults to ON. When enabled, characters can message you on their own when you're idle (see [Autonomous messages](#autonomous-messages) below).
+- **Generate schedules toggle** — defaults to OFF. When enabled and you click Start chatting, the engine runs the Schedule Planner agent to generate weekly availability grids for each character.
+- **Customize generation parameters toggle** — defaults to OFF. When enabled, you can override the connection's default temperature, max tokens, etc.
 
-Everything except character pick can be deferred. You can attach a lorebook, change persona, or swap connection at any point during the chat.
+Once Connection and at least one Character are set, click **Start chatting** to apply the settings and enter the chat. Lorebooks and presets aren't part of the quick-setup modal — attach those any time via the chat settings drawer.
 
 ## Single-character vs. group chats
 
 The number of characters you select determines the chat shape:
 
 - **1 character** — a 1:1 DM. The character responds to each of your messages.
-- **2 or more characters** — a group chat. The behavior depends on which **group chat mode** you pick (see below).
+- **2 or more characters** — a group chat. By default, characters reply automatically and the Response Orchestrator agent decides who speaks. You can also tell characters to stay quiet unless you `@mention` them — see [Group chat configuration](#group-chat-configuration) below.
 
 There's no separate "group chat mode" to enable — the engine flips into group behavior automatically when you have more than one character.
 
 ## Group chat configuration
 
-Two settings shape how a group chat behaves, both editable in the chat settings drawer once a group chat exists.
+A few settings in the chat settings drawer shape how group chats behave. (Roleplay and Game Mode have their own, more elaborate group-chat controls — what's described here is Conversation-specific.)
 
-### Group chat mode
+### Manual Replies — "Only Reply When Mentioned"
 
-- **Individual** (default) — each character has separate turns. The Response Orchestrator agent decides which character speaks next based on personality, the conversation flow, and any active schedules. You'll see distinct messages from each character.
-- **Merged** — all characters respond as a single composite narrator block. The model writes one message that voices everyone. Useful for quick scene-setting; less so for character interaction.
+A single toggle in the chat settings drawer.
 
-### Response ordering
-
-- **Automatic** (default) — the **Response Orchestrator agent** routes each turn to whichever character should reasonably speak next, based on the conversation flow and character personalities/schedules.
-- **Manual** — a character picker appears in the input bar. Before you send each message, you pick which character responds. Useful if you want tight control over turn-taking, or if the automatic ordering keeps picking "wrong."
-
-You can switch between automatic and manual at any time.
+- **OFF** (default) — characters reply automatically to your messages. If you `@mention` a specific character, the response focuses on that character.
+- **ON** ("Only Reply When Mentioned") — characters stay quiet until you `@mention` one or trigger one from the **character picker** that appears in the input bar (visible in group chats). Useful when you want tight control over turn-taking and don't want everyone responding to every message.
 
 ### Character exchanges
 
-A toggle in the chat settings drawer that lets characters chat with **each other** (not just with you), if it's a group chat. With this on, characters can address one another and respond to each other's messages. With it off, the conversation stays focused on user ↔ characters interaction.
+A toggle in the chat settings drawer (visible only when you have multiple characters) that lets characters chat with **each other** rather than only with you. With this on, the response orchestrator can decide a character should address another character. With it off, all responses are directed at you.
 
 ## Conversation-specific features
 
@@ -72,22 +68,17 @@ Each character in a Conversation chat has a **7-day × 24-hour availability grid
 - **User-editable** in the chat settings drawer — open the schedule editor, drag-fill cells, type custom activity strings.
 - **Regenerable** with global guidance preferences (e.g. `no characters past midnight`, `everyone is a college student`).
 
-Schedules influence two things:
-
-1. **Autonomous messaging timing** (see below) — a character that's `offline` on its schedule won't reach out unprompted.
-2. **Group chat response ordering** — when on `automatic`, characters whose schedules say they're `online` are more likely to be picked next.
-
-Schedules are persistent per-chat. The same character can have different schedules in different chats.
+Schedules influence **autonomous messaging timing** — a character whose schedule says they're `offline` won't reach out unprompted, even if autonomous messages are enabled. They're stored per-chat, so the same character can have different schedules in different conversations.
 
 ### Autonomous messages
 
-A toggle in the chat settings drawer. When enabled, characters can send you messages **on their own** if you've been idle for a while. The Autonomous Messenger agent reads each character's personality and schedule, then triggers an unprompted message when:
+A toggle in the chat settings drawer (and in the quick-setup modal). When enabled, characters can send you messages **on their own** if you've been idle for a while. The Autonomous Messenger agent reads each character's personality and schedule, then triggers an unprompted message when:
 
 - The user has been inactive for a configured amount of time.
 - The character's schedule says they're online or idle (not offline or dnd).
 - The character's personality fits reaching out (a chatty character will message sooner than a reserved one).
 
-Autonomous messages are off by default. Turn them on if you want characters that feel "alive" between sessions; leave them off if you want messages only when you initiate.
+Autonomous messages **default to ON** when you complete the quick-setup modal. Turn them off in the chat settings drawer if you want messages only when you initiate.
 
 ### Selfies and per-character image generation
 

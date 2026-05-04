@@ -285,7 +285,7 @@ This toggle adds the most cost per turn — one or more image API calls each tim
 
 The engine stores game-related media in `packages/server/data/game-assets/` relative to your install. Subfolders are organized by category:
 
-- `music/` — `exploration`, `combat`, `dialogue`, `travel_rest`
+- `music/` — top-level categories `exploration`, `combat`, `dialogue`, `travel_rest`. Each category is further nested by genre (`fantasy`, `slice_of_life`, `horror`, etc.) and intensity (`calm`, `tense`, `intense`) — for example `music/combat/fantasy/intense/`. Legacy flat layouts from older installs are auto-migrated.
 - `sfx/` — `ui`, `combat`, `exploration`
 - `ambient/` — `nature`, `urban`, `interior`
 - `sprites/` — `generic-fantasy`, `generic-scifi`

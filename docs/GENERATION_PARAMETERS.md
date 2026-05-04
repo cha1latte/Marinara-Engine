@@ -6,20 +6,22 @@ This is the canonical reference. Mode-specific guides reference this doc rather 
 
 ## Defaults
 
-When you create or open a connection without overrides, parameters start from these built-in defaults (`ROLEPLAY_PARAMETER_DEFAULTS` in `packages/client/src/components/ui/GenerationParametersEditor.tsx`):
+Marinara ships **two built-in default sets**, picked automatically based on which mode you're setting up. Both are defined in `packages/client/src/components/ui/GenerationParametersEditor.tsx`.
 
-| Parameter          | Default   | Notes                                                                                                                                |
-| ------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `temperature`      | `1`       | Higher = more variety; lower = more deterministic. See Claude note below.                                                            |
-| `maxTokens`        | `8192`    | Cap on response length. Raise if responses get truncated — Game Mode world-gen in particular benefits from `10000` or higher because the structured JSON output is large. |
-| `topP`             | `1`       | See Claude note below.                                                                                                               |
-| `topK`             | `0`       | Disabled; most providers ignore it anyway.                                                                                           |
-| `frequencyPenalty` | `0`       |                                                                                                                                      |
-| `presencePenalty`  | `0`       |                                                                                                                                      |
-| `reasoningEffort`  | `maximum` | Used by reasoning-capable models (Claude with extended thinking, OpenAI o-series). Ignored on non-reasoning models.                  |
-| `verbosity`        | `high`    | Used by GPT-5-family models. Ignored elsewhere.                                                                                      |
+| Parameter          | `CHAT_PARAMETER_DEFAULTS` (Conversation) | `ROLEPLAY_PARAMETER_DEFAULTS` (Roleplay / VN / Game) | Notes                                                                                                                                |
+| ------------------ | ---------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `temperature`      | `1`                                      | `1`                                                  | Higher = more variety; lower = more deterministic. See Claude note below.                                                            |
+| `maxTokens`        | `4096`                                   | `8192`                                               | Cap on response length. Game Mode world-gen in particular benefits from `10000` or higher because the structured JSON output is large. |
+| `topP`             | `1`                                      | `1`                                                  | See Claude note below.                                                                                                               |
+| `topK`             | `0`                                      | `0`                                                  | Disabled; most providers ignore it anyway.                                                                                           |
+| `frequencyPenalty` | `0`                                      | `0`                                                  |                                                                                                                                      |
+| `presencePenalty`  | `0`                                      | `0`                                                  |                                                                                                                                      |
+| `reasoningEffort`  | `maximum`                                | `maximum`                                            | Used by reasoning-capable models (Claude with extended thinking, OpenAI o-series). Ignored on non-reasoning models.                  |
+| `verbosity`        | `high`                                   | `high`                                               | Used by GPT-5-family models. Ignored elsewhere.                                                                                      |
+| `assistantPrefill` | `""` (empty)                             | `""` (empty)                                         | Optional text to prefill into the assistant's response. Most users leave empty.                                                      |
+| `customParameters` | `{}` (empty)                             | `{}` (empty)                                         | Provider-specific overrides for parameters Marinara doesn't expose by default. Most users leave empty.                               |
 
-These work as a starting point — tune from there.
+The two sets are identical except for `maxTokens` — Conversation defaults are tuned for shorter chat replies (4,096), while Roleplay / VN / Game default to longer outputs (8,192) because they render richer narrative content. Both work as a starting point; tune from there.
 
 ## Tuning
 

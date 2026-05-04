@@ -20,7 +20,7 @@ Pick **Conversation** instead if you just want chat without scene chrome. Pick *
 
 ## Setting up a roleplay
 
-Roleplay uses the same five-step setup wizard as Conversation Mode. Only the connection is required:
+Roleplay uses a five-step setup wizard (distinct from Conversation Mode's single-screen quick-setup modal). Only the connection is required:
 
 1. **Connection** — which LLM provider/model the chat sends messages to.
 2. **Preset** — saved prompt-stack template. Default works for most cases.
