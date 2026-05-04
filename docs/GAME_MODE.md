@@ -64,12 +64,10 @@ Within a single Game Mode game, you can play across multiple **sessions** — lo
 
 - Lower temperature (`0.45` vs. `~1.0` for gameplay) — more deterministic structured output
 - Input: the full session transcript plus the journal and current game state
-- Output: a JSON payload containing
-  - **summary** — narrative recap of what happened this session
-  - **resumePoint** — short paragraph stating where the next session should pick up
-  - Updated **story arc**, **plot twists**, and **party arcs** if narrative beats warrant
-  - Updated **party character cards** if characters earned abilities, changed class, etc.
-  - Updated **morale**
+- Output: a JSON payload with three top-level sections
+  - **`summary`** — structured continuity data, including the narrative recap (a nested `summary` field) and the `resumePoint` for the next session, plus categorized continuity fields (party dynamics, party state, key discoveries, character moments, little details, NPC updates, and a stats snapshot containing party morale and inventory)
+  - **`campaignProgression`** — updates to the overarching campaign: `storyArc`, `plotTwists`, and `partyArcs`. Only refreshed if the session materially advanced them; otherwise carried forward unchanged
+  - **`characterCards`** — the full updated party character cards. Changes are conservative — class evolution, new abilities, stat bumps of ±1–3 per session — only when session events justify them
 
 This is closer to world-gen in shape (structured JSON output) than to a gameplay turn, but it operates on existing state instead of generating from scratch. The resulting summary becomes part of every subsequent session's prompt context (it's what shows up under "session summaries from previous play sessions" in [Phase 2](#phase-2-gameplay-turn-by-turn)).
 

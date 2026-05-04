@@ -9,8 +9,11 @@ This is the canonical reference. Mode-specific guides reference this doc rather 
 Generation parameters are **layered**. The effective parameters for a chat at runtime come from (in order of increasing precedence):
 
 1. **The preset attached to the chat.** New presets start from a shared baseline, `DEFAULT_GENERATION_PARAMS` in `packages/shared/src/constants/defaults.ts`.
-2. **The connection's `defaultParameters`**, settable when editing a connection.
-3. **Per-chat overrides**, settable in the chat's settings drawer or via the wizard's "Customize generation parameters" toggle.
+2. **Mode-specific runtime defaults.** Some modes inject preferred defaults at request time, ahead of connection/chat overrides:
+   - **Scene chats** (forked Roleplay scenes) preset `maxTokens: 8192`, `reasoningEffort: "maximum"`, `verbosity: "high"` before user overrides apply.
+   - **Game Mode** injects optimized defaults intended for the world-gen / structured-JSON workload — `temperature: 1`, `maxTokens: 16384`, `topP: 1`, `topK: 0`, both penalties at `0`, `reasoningEffort: "maximum"`. These can still be overridden if a user explicitly sets the field at the connection or chat level. Local Gemma models bypass these and just get a `maxTokens` floor of `16384`.
+3. **The connection's `defaultParameters`**, settable when editing a connection. Wins over both the preset baseline and any mode-specific defaults for fields the user explicitly set.
+4. **Per-chat overrides**, settable in the chat's settings drawer or via the wizard's "Customize generation parameters" toggle. Highest precedence.
 
 ### Preset baseline (`DEFAULT_GENERATION_PARAMS`)
 
