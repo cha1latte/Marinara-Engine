@@ -92,6 +92,26 @@ export function getDatabaseDriver() {
   return normalizeEnvValue(process.env.DATABASE_DRIVER);
 }
 
+export function getStorageBackend() {
+  const raw = normalizeEnvValue(process.env.STORAGE_BACKEND ?? process.env.MARINARA_STORAGE_BACKEND);
+  if (raw) return raw.toLowerCase();
+
+  // New default for v1.5.7+: user data is persisted as files. Advanced users
+  // can opt back into the legacy persistent SQLite database with
+  // STORAGE_BACKEND=sqlite.
+  return "files";
+}
+
+export function isFileStorageBackend() {
+  return getStorageBackend() !== "sqlite";
+}
+
+export function getFileStorageDir() {
+  const raw = normalizeEnvValue(process.env.FILE_STORAGE_DIR ?? process.env.MARINARA_FILE_STORAGE_DIR);
+  if (raw) return resolveFromServerRoot(raw);
+  return resolve(getDataDir(), "storage");
+}
+
 export function getDatabaseUrl() {
   const raw = normalizeEnvValue(process.env.DATABASE_URL);
   if (!raw) {
@@ -117,6 +137,13 @@ export function getDatabaseFilePath() {
   const filePath = url.slice("file:".length);
   if (!filePath || filePath === ":memory:" || filePath.startsWith(":memory:")) return null;
   return filePath;
+}
+
+export function getLegacyDatabaseImportPaths() {
+  const candidates = [getDatabaseFilePath(), DEFAULT_DATABASE_PATH, REGRESSION_DATABASE_PATH].filter(
+    (path): path is string => Boolean(path),
+  );
+  return [...new Set(candidates)];
 }
 
 export function getIpAllowlist() {
@@ -299,9 +326,17 @@ export function logStorageDiagnostics(
 ) {
   const dataDir = getDataDir();
   const dbPath = getDatabaseFilePath();
+  const backend = getStorageBackend();
+  const legacyImportPaths = getLegacyDatabaseImportPaths();
 
   logger.info(`[storage] DATA_DIR=${dataDir}`);
-  if (dbPath) {
+  logger.info(`[storage] STORAGE_BACKEND=${backend}`);
+  if (backend !== "sqlite") {
+    logger.info(`[storage] FILE_STORAGE_DIR=${getFileStorageDir()}`);
+    if (legacyImportPaths.length > 0) {
+      logger.info(`[storage] LEGACY_DATABASE_IMPORT_SOURCES=${legacyImportPaths.join(", ")}`);
+    }
+  } else if (dbPath) {
     logger.info(`[storage] DATABASE_FILE=${dbPath}`);
   } else {
     logger.info(`[storage] DATABASE_URL=${getDatabaseUrl()}`);

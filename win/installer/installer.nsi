@@ -13,7 +13,7 @@
 
 ; ── App metadata ──
 !define APP_NAME "Marinara Engine"
-!define APP_VERSION "1.5.6"
+!define APP_VERSION "1.5.7"
 !define APP_PUBLISHER "Pasta-Devs"
 !define APP_URL "https://github.com/Pasta-Devs/Marinara-Engine"
 !define REPO_URL "https://github.com/Pasta-Devs/Marinara-Engine.git"

@@ -10,7 +10,7 @@ docker compose up -d
 
 Then open **<http://127.0.0.1:7860>**.
 
-Data (SQLite database, uploads, fonts, default backgrounds) is stored in the named volume `marinara-data`. To inspect it:
+Data (file-backed storage, uploads, fonts, default backgrounds) is stored in the named volume `marinara-data`. To inspect it:
 
 ```bash
 docker volume inspect marinara-data

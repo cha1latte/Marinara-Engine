@@ -118,6 +118,10 @@ export interface ChatMetadata {
   spriteCharacterIds?: string[];
   /** Preferred sidebar / default layout side for chat sprites. */
   spritePosition?: SpriteSide;
+  /** Display scale for roleplay Expression Engine sprites. */
+  spriteScale?: number;
+  /** Display opacity for roleplay Expression Engine sprites. */
+  spriteOpacity?: number;
   /** Saved freeform positions for enabled roleplay sprites. */
   spritePlacements?: Record<string, SpritePlacement>;
   /** When true, a shared group scenario replaces individual character card scenarios */
@@ -263,6 +267,8 @@ export interface MessageExtra {
   } | null;
   /** Stored for generation context but hidden from the visible chat transcript */
   hiddenFromUser?: boolean;
+  /** When true, the visible message is excluded from future AI prompt context */
+  hiddenFromAI?: boolean;
 }
 
 /** Metadata about how a message was generated. */

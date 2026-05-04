@@ -9,7 +9,16 @@ import { join } from "path";
 import { inflateRawSync } from "zlib";
 import { DATA_DIR } from "../../utils/data-dir.js";
 import { newId } from "../../utils/id-generator.js";
-import { inferImageSource } from "@marinara-engine/shared";
+import {
+  DEFAULT_AUTOMATIC1111_DEFAULTS,
+  DEFAULT_COMFYUI_DEFAULTS,
+  mergeNegativePrompt,
+  mergePromptPrefix,
+  inferImageSource,
+  type Automatic1111Defaults,
+  type ComfyUiDefaults,
+  type ImageGenerationDefaultsProfile,
+} from "@marinara-engine/shared";
 
 const GALLERY_DIR = join(DATA_DIR, "gallery");
 
@@ -31,6 +40,8 @@ export interface ImageGenRequest {
   model?: string;
   /** Optional ComfyUI workflow JSON. Placeholders like %prompt%, %width%, %height%, %seed% will be replaced. */
   comfyWorkflow?: string;
+  /** Optional connection-scoped defaults for local Stable Diffusion backends. */
+  imageDefaults?: ImageGenerationDefaultsProfile | null;
   /** Optional base64-encoded reference image for img2img / character consistency. */
   referenceImage?: string;
   /** Optional array of base64-encoded reference images (avatars). Providers that support multiple refs use all; others use the first. */
@@ -704,6 +715,39 @@ const DEFAULT_COMFYUI_WORKFLOW: Record<string, unknown> = {
 
 const COMFYUI_GEN_TIMEOUT = Number(process.env.COMFYUI_GEN_TIMEOUT ?? 120);
 
+function randomSeed(): number {
+  return Math.floor(Math.random() * 2 ** 32);
+}
+
+function resolveSeed(profile: ImageGenerationDefaultsProfile | null | undefined): number {
+  return typeof profile?.seed === "number" && profile.seed >= 0 ? profile.seed : randomSeed();
+}
+
+function resolveAutomatic1111Defaults(request: ImageGenRequest): Automatic1111Defaults {
+  if (request.imageDefaults?.service === "automatic1111" && request.imageDefaults.automatic1111) {
+    return request.imageDefaults.automatic1111;
+  }
+  return DEFAULT_AUTOMATIC1111_DEFAULTS;
+}
+
+function resolveComfyUiDefaults(request: ImageGenRequest): ComfyUiDefaults {
+  if (request.imageDefaults?.service === "comfyui" && request.imageDefaults.comfyui) {
+    return request.imageDefaults.comfyui;
+  }
+  return DEFAULT_COMFYUI_DEFAULTS;
+}
+
+function buildDefaultComfyUiWorkflow(defaults: ComfyUiDefaults): Record<string, unknown> {
+  const workflow = JSON.parse(JSON.stringify(DEFAULT_COMFYUI_WORKFLOW)) as Record<string, unknown>;
+  const samplerInputs = ((workflow["3"] as Record<string, unknown>)?.inputs ?? {}) as Record<string, unknown>;
+  samplerInputs.steps = defaults.steps;
+  samplerInputs.cfg = defaults.cfgScale;
+  samplerInputs.sampler_name = defaults.sampler || DEFAULT_COMFYUI_DEFAULTS.sampler;
+  samplerInputs.scheduler = defaults.scheduler || DEFAULT_COMFYUI_DEFAULTS.scheduler;
+  samplerInputs.denoise = defaults.denoisingStrength;
+  return workflow;
+}
+
 function escapeJsonString(str: string): string {
   return str
     .replace(/\\/g, "\\\\")
@@ -715,7 +759,10 @@ function escapeJsonString(str: string): string {
 
 async function generateComfyUI(baseUrl: string, request: ImageGenRequest): Promise<ImageGenResult> {
   const base = baseUrl.replace(/\/+$/, "");
-  const seed = Math.floor(Math.random() * 2 ** 32);
+  const defaults = resolveComfyUiDefaults(request);
+  const seed = resolveSeed(request.imageDefaults);
+  const prompt = mergePromptPrefix(defaults.promptPrefix, request.prompt || "");
+  const negativePrompt = mergeNegativePrompt(defaults.negativePromptPrefix, request.negativePrompt);
 
   // Parse custom workflow or use default
   let workflow: Record<string, unknown>;
@@ -726,16 +773,25 @@ async function generateComfyUI(baseUrl: string, request: ImageGenRequest): Promi
       throw new Error("Invalid ComfyUI workflow JSON");
     }
   } else {
-    workflow = JSON.parse(JSON.stringify(DEFAULT_COMFYUI_WORKFLOW));
+    workflow = buildDefaultComfyUiWorkflow(defaults);
   }
 
   // Replace placeholders in the workflow JSON string
   let wfStr = JSON.stringify(workflow);
-  wfStr = wfStr.replace(/%prompt%/g, escapeJsonString(request.prompt || ""));
-  wfStr = wfStr.replace(/%negative_prompt%/g, escapeJsonString(request.negativePrompt || ""));
+  wfStr = wfStr.replace(/%prompt%/g, escapeJsonString(prompt));
+  wfStr = wfStr.replace(/%negative_prompt%/g, escapeJsonString(negativePrompt));
   wfStr = wfStr.replace(/%width%/g, String(request.width ?? 512));
   wfStr = wfStr.replace(/%height%/g, String(request.height ?? 768));
   wfStr = wfStr.replace(/%seed%/g, String(seed));
+  wfStr = wfStr.replace(/%steps%/g, String(defaults.steps));
+  wfStr = wfStr.replace(/%cfg%/g, String(defaults.cfgScale));
+  wfStr = wfStr.replace(/%cfg_scale%/g, String(defaults.cfgScale));
+  wfStr = wfStr.replace(/%scale%/g, String(defaults.cfgScale));
+  wfStr = wfStr.replace(/%sampler%/g, escapeJsonString(defaults.sampler));
+  wfStr = wfStr.replace(/%scheduler%/g, escapeJsonString(defaults.scheduler));
+  wfStr = wfStr.replace(/%denoise%/g, String(defaults.denoisingStrength));
+  wfStr = wfStr.replace(/%denoising_strength%/g, String(defaults.denoisingStrength));
+  wfStr = wfStr.replace(/%clip_skip%/g, String(defaults.clipSkip ?? 0));
   if (request.model) {
     wfStr = wfStr.replace(/%model%/g, request.model.replace(/"/g, '\\"'));
   }
@@ -810,25 +866,38 @@ async function generateComfyUI(baseUrl: string, request: ImageGenRequest): Promi
 
 async function generateAutomatic1111(baseUrl: string, request: ImageGenRequest): Promise<ImageGenResult> {
   const base = baseUrl.replace(/\/+$/, "");
+  const defaults = resolveAutomatic1111Defaults(request);
   const useImg2Img = !!(request.referenceImage || request.referenceImages?.length);
+  const overrideSettings: Record<string, unknown> = {};
+  if (request.model) {
+    overrideSettings.sd_model_checkpoint = request.model;
+  }
+  if (defaults.clipSkip) {
+    overrideSettings.CLIP_stop_at_last_layers = defaults.clipSkip;
+  }
+
   const body: Record<string, unknown> = {
-    prompt: request.prompt,
-    negative_prompt: request.negativePrompt || "",
+    prompt: mergePromptPrefix(defaults.promptPrefix, request.prompt),
+    negative_prompt: mergeNegativePrompt(defaults.negativePromptPrefix, request.negativePrompt),
     width: request.width ?? 512,
     height: request.height ?? 768,
-    steps: 20,
-    cfg_scale: 7,
-    seed: Math.floor(Math.random() * 2 ** 32),
-    sampler_name: "Euler a",
+    steps: defaults.steps,
+    cfg_scale: defaults.cfgScale,
+    seed: resolveSeed(request.imageDefaults),
+    sampler_name: defaults.sampler || DEFAULT_AUTOMATIC1111_DEFAULTS.sampler,
     batch_size: 1,
     n_iter: 1,
+    restore_faces: defaults.restoreFaces,
   };
-  if (request.model) {
-    body.override_settings = { sd_model_checkpoint: request.model };
+  if (defaults.scheduler) {
+    body.scheduler = defaults.scheduler;
+  }
+  if (Object.keys(overrideSettings).length > 0) {
+    body.override_settings = overrideSettings;
   }
   if (useImg2Img) {
     body.init_images = [request.referenceImage ?? request.referenceImages?.[0]];
-    body.denoising_strength = 0.6;
+    body.denoising_strength = defaults.denoisingStrength;
   }
 
   const endpoint = useImg2Img ? `${base}/sdapi/v1/img2img` : `${base}/sdapi/v1/txt2img`;

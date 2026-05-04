@@ -179,7 +179,7 @@ export async function executeAgent(
     logger.debug(`[agent] ${config.type} raw response: ${responseText.slice(0, 500)}`);
 
     // Parse the result based on agent type
-    const parsed = parseAgentResponse(config.type, responseText);
+    const parsed = parseAgentResponse(config, responseText);
 
     return {
       agentId: config.id,
@@ -232,7 +232,7 @@ async function executeAgentWithTools(
     // No tool calls → final response
     if (!result.toolCalls || result.toolCalls.length === 0) {
       const responseText = result.content?.trim() ?? "";
-      const parsed = parseAgentResponse(config.type, responseText);
+      const parsed = parseAgentResponse(config, responseText);
       return {
         agentId: config.id,
         agentType: config.type,
@@ -288,7 +288,7 @@ async function executeAgentWithTools(
   });
   totalTokens += finalResult.usage?.totalTokens ?? 0;
   const responseText = finalResult.content?.trim() ?? "";
-  const parsed = parseAgentResponse(config.type, responseText);
+  const parsed = parseAgentResponse(config, responseText);
   return {
     agentId: config.id,
     agentType: config.type,
@@ -473,7 +473,7 @@ function buildBatchSystemPrompt(configs: AgentExecConfig[], context: AgentContex
   parts.push(``);
   parts.push(`─── REQUIRED OUTPUT FORMAT ───`);
   for (const config of configs) {
-    const isJson = JSON_AGENTS.has(config.type);
+    const isJson = agentResponseIsJson(config);
     parts.push(
       `<result agent="${config.type}">`,
       isJson ? `{ ... valid JSON ... }` : `... your text output ...`,
@@ -535,7 +535,7 @@ function parseBatchResponse(
     }
 
     if (matchedOutput !== null) {
-      const parsedResult = parseAgentResponse(config.type, matchedOutput);
+      const parsedResult = parseAgentResponse(config, matchedOutput);
       parsed.push({
         agentId: config.id,
         agentType: config.type,
@@ -565,7 +565,7 @@ function makeError(config: AgentExecConfig, error: string, startTime: number): A
   return {
     agentId: config.id,
     agentType: config.type,
-    type: AGENT_RESULT_TYPE_MAP[config.type] ?? "context_injection",
+    type: resolveAgentResultType(config),
     data: null,
     tokensUsed: 0,
     durationMs: Date.now() - startTime,
@@ -945,6 +945,49 @@ const AGENT_RESULT_TYPE_MAP: Record<string, AgentResultType> = {
   "secret-plot-driver": "secret_plot",
 };
 
+const AGENT_RESULT_TYPES = new Set<AgentResultType>([
+  "game_state_update",
+  "text_rewrite",
+  "sprite_change",
+  "echo_message",
+  "quest_update",
+  "image_prompt",
+  "context_injection",
+  "continuity_check",
+  "director_event",
+  "lorebook_update",
+  "character_card_update",
+  "prompt_review",
+  "background_change",
+  "character_tracker_update",
+  "persona_stats_update",
+  "custom_tracker_update",
+  "chat_summary",
+  "spotify_control",
+  "haptic_command",
+  "cyoa_choices",
+  "secret_plot",
+  "game_master_narration",
+  "party_action",
+  "game_map_update",
+  "game_state_transition",
+]);
+
+const TEXT_RESULT_TYPES = new Set<AgentResultType>(["context_injection", "director_event"]);
+
+export function resolveAgentResultType(config: Pick<AgentExecConfig, "type" | "settings">): AgentResultType {
+  const configured = config.settings?.resultType;
+  if (typeof configured === "string" && AGENT_RESULT_TYPES.has(configured as AgentResultType)) {
+    return configured as AgentResultType;
+  }
+  return AGENT_RESULT_TYPE_MAP[config.type] ?? "context_injection";
+}
+
+function agentResponseIsJson(config: Pick<AgentExecConfig, "type" | "settings">): boolean {
+  const resultType = resolveAgentResultType(config);
+  return JSON_AGENTS.has(config.type) || !TEXT_RESULT_TYPES.has(resultType);
+}
+
 /** Agents that return structured JSON. */
 const JSON_AGENTS = new Set([
   "world-state",
@@ -972,10 +1015,16 @@ const JSON_AGENTS = new Set([
 /**
  * Parse the raw LLM response into a typed result.
  */
-function parseAgentResponse(agentType: string, responseText: string): { type: AgentResultType; data: unknown } {
-  const resultType = AGENT_RESULT_TYPE_MAP[agentType] ?? "context_injection";
+function parseAgentResponse(
+  config: Pick<AgentExecConfig, "type" | "settings">,
+  responseText: string,
+): {
+  type: AgentResultType;
+  data: unknown;
+} {
+  const resultType = resolveAgentResultType(config);
 
-  if (JSON_AGENTS.has(agentType)) {
+  if (agentResponseIsJson(config)) {
     try {
       const jsonStr = extractJson(responseText);
       const data = JSON.parse(jsonStr);

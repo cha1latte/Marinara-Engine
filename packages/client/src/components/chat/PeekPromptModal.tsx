@@ -21,6 +21,7 @@ interface GenerationInfo {
   showThoughts?: boolean | null;
   reasoningEffort?: string | null;
   verbosity?: string | null;
+  assistantPrefill?: string | null;
   tokensPrompt?: number | null;
   tokensCompletion?: number | null;
   tokensCachedPrompt?: number | null;
@@ -381,6 +382,7 @@ export function PeekPromptModal({ data, onClose }: PeekPromptModalProps) {
       if (gen.showThoughts) pills.push({ label: "Thinking", value: "On" });
       if (gen.reasoningEffort) pills.push({ label: "Reasoning", value: gen.reasoningEffort });
       if (gen.verbosity) pills.push({ label: "Verbosity", value: gen.verbosity });
+      if (gen.assistantPrefill) pills.push({ label: "Assistant Prefill", value: "On" });
     } else if (params) {
       if (params.temperature != null) pills.push({ label: "Temperature", value: String(params.temperature) });
       if (params.topP != null && params.topP !== 1) pills.push({ label: "Top P", value: String(params.topP) });
@@ -394,6 +396,7 @@ export function PeekPromptModal({ data, onClose }: PeekPromptModalProps) {
       if (params.showThoughts) pills.push({ label: "Thinking", value: "On" });
       if (params.reasoningEffort) pills.push({ label: "Reasoning", value: String(params.reasoningEffort) });
       if (params.verbosity) pills.push({ label: "Verbosity", value: String(params.verbosity) });
+      if (params.assistantPrefill) pills.push({ label: "Assistant Prefill", value: "On" });
     }
     return pills;
   }, [gen, params]);

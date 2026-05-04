@@ -29,6 +29,11 @@ const TTS_SOURCE_DEFAULTS: Record<TTSSource, { baseUrl: string; model: string }>
 };
 
 const ELEVENLABS_NON_TTS_MODELS = new Set(["eleven_ttv_v3", "eleven_multilingual_ttv_v2"]);
+const ELEVENLABS_TTS_MODEL_ALIASES: Record<string, string> = {
+  tts_v3: "eleven_v3",
+  elevenlabs_v3: "eleven_v3",
+  elevenlabs_tts_v3: "eleven_v3",
+};
 
 const speakSchema = z.object({
   text: z.string().min(1).max(4096),
@@ -93,6 +98,11 @@ function configuredBaseUrl(cfg: TTSConfig) {
 
 function elevenLabsApiRoot(baseUrl: string) {
   return baseUrl.replace(/\/v\d+$/, "");
+}
+
+function normalizeElevenLabsTtsModelId(model: string) {
+  const trimmed = model.trim();
+  return ELEVENLABS_TTS_MODEL_ALIASES[trimmed.toLowerCase()] ?? trimmed;
 }
 
 function readString(value: unknown) {
@@ -392,7 +402,8 @@ export async function ttsRoutes(app: FastifyInstance) {
     }
 
     const base = configuredBaseUrl(cfg);
-    const model = (cfg.model || TTS_SOURCE_DEFAULTS[cfg.source].model).trim();
+    const configuredModel = (cfg.model || TTS_SOURCE_DEFAULTS[cfg.source].model).trim();
+    const model = cfg.source === "elevenlabs" ? normalizeElevenLabsTtsModelId(configuredModel) : configuredModel;
     const normalizedModel = model.toLowerCase();
     if (cfg.source === "elevenlabs" && ELEVENLABS_NON_TTS_MODELS.has(normalizedModel)) {
       return reply.status(400).send({

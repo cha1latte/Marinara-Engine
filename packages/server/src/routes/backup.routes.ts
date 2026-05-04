@@ -4,7 +4,7 @@
 import type { FastifyInstance } from "fastify";
 import { basename, join, relative } from "path";
 import { existsSync, readdirSync, statSync } from "fs";
-import { cp, mkdir, copyFile, readFile } from "fs/promises";
+import { cp, mkdir, copyFile, readFile, writeFile } from "fs/promises";
 import AdmZip from "adm-zip";
 import { createCharactersStorage } from "../services/storage/characters.storage.js";
 import { createLorebooksStorage } from "../services/storage/lorebooks.storage.js";
@@ -13,11 +13,17 @@ import { createAgentsStorage } from "../services/storage/agents.storage.js";
 import { createThemesStorage } from "../services/storage/themes.storage.js";
 import type { ExportEnvelope } from "@marinara-engine/shared";
 import { getDataDir } from "../utils/data-dir.js";
-import { getDatabaseFilePath } from "../config/runtime-config.js";
+import { getDatabaseFilePath, getFileStorageDir } from "../config/runtime-config.js";
 import { normalizeTimestampOverrides } from "../services/import/import-timestamps.js";
+import { flushDB } from "../db/connection.js";
 
 /** Directories inside DATA_DIR that should be included in every backup. */
-const BACKUP_DIRS = ["avatars", "sprites", "backgrounds", "gallery", "fonts", "knowledge-sources"];
+const BACKUP_DIRS = ["storage", "avatars", "sprites", "backgrounds", "gallery", "fonts", "knowledge-sources"];
+const PROFILE_IMPORT_BODY_LIMIT_BYTES = 256 * 1024 * 1024;
+
+function resolveBackupDir(dataDir: string, dirName: string) {
+  return dirName === "storage" ? getFileStorageDir() : join(dataDir, dirName);
+}
 
 function resolveAvatarWritePath(dataDir: string, avatarPath: unknown) {
   if (typeof avatarPath !== "string" || !avatarPath.trim()) return null;
@@ -26,9 +32,94 @@ function resolveAvatarWritePath(dataDir: string, avatarPath: unknown) {
   return join(dataDir, "avatars", filename);
 }
 
+async function buildProfileExportEnvelope(app: FastifyInstance): Promise<ExportEnvelope> {
+  const chars = createCharactersStorage(app.db);
+  const lbs = createLorebooksStorage(app.db);
+  const presets = createPromptsStorage(app.db);
+  const agents = createAgentsStorage(app.db);
+  const themes = createThemesStorage(app.db);
+  const dataDir = getDataDir();
+
+  const allChars = await chars.list();
+  const characterExports = await Promise.all(
+    allChars.map(async (c: any) => {
+      let avatarBase64: string | null = null;
+      if (c.avatarPath && existsSync(join(dataDir, c.avatarPath))) {
+        const buf = await readFile(join(dataDir, c.avatarPath));
+        avatarBase64 = buf.toString("base64");
+      }
+      return { ...c, avatarBase64 };
+    }),
+  );
+
+  const allPersonaRows = await chars.listPersonas();
+  const allPersonas = await Promise.all(
+    (allPersonaRows as any[]).map(async (p: any) => {
+      let avatarBase64: string | null = null;
+      if (p.avatarPath && existsSync(join(dataDir, p.avatarPath))) {
+        const buf = await readFile(join(dataDir, p.avatarPath));
+        avatarBase64 = buf.toString("base64");
+      }
+      return { ...p, avatarBase64 };
+    }),
+  );
+
+  const allLorebooks = await lbs.list();
+  const lorebookExports = await Promise.all(
+    (allLorebooks as any[]).map(async (lb: any) => {
+      const folders = await lbs.listFolders(lb.id);
+      const entries = await lbs.listEntries(lb.id);
+      return { ...lb, folders, entries };
+    }),
+  );
+
+  const allPresets = await presets.list();
+  const presetExports = await Promise.all(
+    (allPresets as any[]).map(async (p: any) => {
+      const groups = await presets.listGroups(p.id);
+      const sections = await presets.listSections(p.id);
+      const choices = await presets.listChoiceBlocksForPreset(p.id);
+      return { ...p, groups, sections, choices };
+    }),
+  );
+
+  const allAgents = await agents.list();
+  const allThemes = await themes.list();
+
+  return {
+    type: "marinara_profile",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    data: {
+      characters: characterExports,
+      personas: allPersonas,
+      lorebooks: lorebookExports,
+      presets: presetExports,
+      agents: allAgents,
+      themes: allThemes,
+    },
+  };
+}
+
+function buildBackupRestoreNotes() {
+  return [
+    "Marinara Engine backup",
+    "",
+    "This archive contains a raw filesystem backup for manual recovery.",
+    "",
+    "For one-click import inside Marinara:",
+    "1. Extract marinara-profile.json from this zip.",
+    "2. Open Settings -> Import.",
+    "3. Use Import Profile (JSON), not Import Marinara File (.marinara.json).",
+    "",
+    "The .marinara.json importer is for individual characters, personas, lorebooks, and presets.",
+  ].join("\n");
+}
+
 export async function backupRoutes(app: FastifyInstance) {
   // Create a full backup folder
   app.post("/", async (_req, reply) => {
+    await flushDB();
     const dataDir = getDataDir();
     const dbPath = getDatabaseFilePath();
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-").replace("T", "_").slice(0, 19);
@@ -37,6 +128,9 @@ export async function backupRoutes(app: FastifyInstance) {
     const backupDir = join(backupsRoot, backupName);
 
     await mkdir(backupDir, { recursive: true });
+    const profileEnvelope = await buildProfileExportEnvelope(app);
+    await writeFile(join(backupDir, "marinara-profile.json"), JSON.stringify(profileEnvelope, null, 2), "utf8");
+    await writeFile(join(backupDir, "RESTORE.txt"), buildBackupRestoreNotes(), "utf8");
 
     // 1. Copy the database file (respects DATABASE_URL)
     if (dbPath && existsSync(dbPath)) {
@@ -53,7 +147,7 @@ export async function backupRoutes(app: FastifyInstance) {
 
     // 2. Copy data directories
     for (const dirName of BACKUP_DIRS) {
-      const src = join(dataDir, dirName);
+      const src = resolveBackupDir(dataDir, dirName);
       if (existsSync(src)) {
         await cp(src, join(backupDir, dirName), { recursive: true });
       }
@@ -69,12 +163,16 @@ export async function backupRoutes(app: FastifyInstance) {
   // user-chosen location via the browser's Save dialog / File System Access
   // API. Preferred on Android where the on-disk data folder isn't reachable.
   app.post("/download", async (_req, reply) => {
+    await flushDB();
     const dataDir = getDataDir();
     const dbPath = getDatabaseFilePath();
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-").replace("T", "_").slice(0, 19);
     const backupName = `marinara-backup-${timestamp}`;
 
     const zip = new AdmZip();
+    const profileEnvelope = await buildProfileExportEnvelope(app);
+    zip.addFile(`${backupName}/marinara-profile.json`, Buffer.from(JSON.stringify(profileEnvelope, null, 2), "utf8"));
+    zip.addFile(`${backupName}/RESTORE.txt`, Buffer.from(buildBackupRestoreNotes(), "utf8"));
 
     // 1. Add the database file (and WAL/SHM if present)
     if (dbPath && existsSync(dbPath)) {
@@ -90,7 +188,7 @@ export async function backupRoutes(app: FastifyInstance) {
 
     // 2. Recursively add each data directory under backupName/<dir>/...
     for (const dirName of BACKUP_DIRS) {
-      const src = join(dataDir, dirName);
+      const src = resolveBackupDir(dataDir, dirName);
       if (!existsSync(src)) continue;
       const stack: string[] = [src];
       while (stack.length > 0) {
@@ -101,7 +199,7 @@ export async function backupRoutes(app: FastifyInstance) {
           if (st.isDirectory()) {
             stack.push(full);
           } else if (st.isFile()) {
-            const rel = relative(dataDir, full).split(/[\\/]/g).join("/");
+            const rel = [dirName, relative(src, full)].filter(Boolean).join("/").split(/[\\/]/g).join("/");
             zip.addFile(`${backupName}/${rel}`, await readFile(full));
           }
         }
@@ -159,77 +257,7 @@ export async function backupRoutes(app: FastifyInstance) {
   // Returns a portable JSON envelope with characters, personas, lorebooks,
   // presets (+ groups/sections/choices), agent configs, and synced custom themes.
   app.get("/export-profile", async (_req, reply) => {
-    const chars = createCharactersStorage(app.db);
-    const lbs = createLorebooksStorage(app.db);
-    const presets = createPromptsStorage(app.db);
-    const agents = createAgentsStorage(app.db);
-    const themes = createThemesStorage(app.db);
-
-    // Characters — include avatar as base64 if available
-    const allChars = await chars.list();
-    const characterExports = await Promise.all(
-      allChars.map(async (c: any) => {
-        const dataDir = getDataDir();
-        let avatarBase64: string | null = null;
-        if (c.avatarPath && existsSync(join(dataDir, c.avatarPath))) {
-          const buf = await readFile(join(dataDir, c.avatarPath));
-          avatarBase64 = buf.toString("base64");
-        }
-        return { ...c, avatarBase64 };
-      }),
-    );
-
-    // Personas — include avatar as base64 if available
-    const allPersonaRows = await chars.listPersonas();
-    const allPersonas = await Promise.all(
-      (allPersonaRows as any[]).map(async (p: any) => {
-        const dataDir = getDataDir();
-        let avatarBase64: string | null = null;
-        if (p.avatarPath && existsSync(join(dataDir, p.avatarPath))) {
-          const buf = await readFile(join(dataDir, p.avatarPath));
-          avatarBase64 = buf.toString("base64");
-        }
-        return { ...p, avatarBase64 };
-      }),
-    );
-
-    // Lorebooks + entries
-    const allLorebooks = await lbs.list();
-    const lorebookExports = await Promise.all(
-      (allLorebooks as any[]).map(async (lb: any) => {
-        const entries = await lbs.listEntries(lb.id);
-        return { ...lb, entries };
-      }),
-    );
-
-    // Presets + groups + sections + choices
-    const allPresets = await presets.list();
-    const presetExports = await Promise.all(
-      (allPresets as any[]).map(async (p: any) => {
-        const groups = await presets.listGroups(p.id);
-        const sections = await presets.listSections(p.id);
-        const choices = await presets.listChoiceBlocksForPreset(p.id);
-        return { ...p, groups, sections, choices };
-      }),
-    );
-
-    // Agent configs
-    const allAgents = await agents.list();
-    const allThemes = await themes.list();
-
-    const envelope: ExportEnvelope = {
-      type: "marinara_profile",
-      version: 1,
-      exportedAt: new Date().toISOString(),
-      data: {
-        characters: characterExports,
-        personas: allPersonas,
-        lorebooks: lorebookExports,
-        presets: presetExports,
-        agents: allAgents,
-        themes: allThemes,
-      },
-    };
+    const envelope = await buildProfileExportEnvelope(app);
 
     return reply
       .header("Content-Disposition", `attachment; filename="marinara-profile.json"`)
@@ -239,7 +267,7 @@ export async function backupRoutes(app: FastifyInstance) {
 
   // ── Profile Import ──
   // Accepts a profile JSON envelope and creates all entities.
-  app.post("/import-profile", async (req, reply) => {
+  app.post("/import-profile", { bodyLimit: PROFILE_IMPORT_BODY_LIMIT_BYTES }, async (req, reply) => {
     const envelope = req.body as ExportEnvelope;
     if (!envelope || envelope.type !== "marinara_profile" || envelope.version !== 1) {
       return reply.status(400).send({ error: "Invalid profile export" });
@@ -342,9 +370,26 @@ export async function backupRoutes(app: FastifyInstance) {
             },
             normalizeTimestampOverrides({ createdAt: lb.createdAt, updatedAt: lb.updatedAt }),
           );
+          const folderIdMap = new Map<string, string>();
+          if (created && Array.isArray(lb.folders)) {
+            for (const folder of lb.folders) {
+              const oldId = typeof folder.id === "string" ? folder.id : null;
+              const createdFolder = (await lbs.createFolder((created as any).id, {
+                name: folder.name ?? "Folder",
+                enabled: folder.enabled === "true" || folder.enabled === true,
+                parentFolderId: null,
+                order: folder.order ?? 0,
+              })) as { id?: string } | null;
+              if (oldId && createdFolder?.id) folderIdMap.set(oldId, createdFolder.id);
+            }
+          }
           if (created && Array.isArray(lb.entries)) {
             for (const entry of lb.entries) {
-              await lbs.createEntry({ ...entry, lorebookId: (created as any).id });
+              const folderId =
+                typeof entry.folderId === "string" && folderIdMap.has(entry.folderId)
+                  ? folderIdMap.get(entry.folderId)
+                  : null;
+              await lbs.createEntry({ ...entry, lorebookId: (created as any).id, folderId });
             }
           }
           stats.lorebooks++;

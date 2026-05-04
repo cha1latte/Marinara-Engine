@@ -214,63 +214,6 @@ if [ ! -d "node_modules" ] || [ "$TERMUX_FORCE_INSTALL" = "1" ]; then
     run_pnpm install
 fi
 
-# ── Ensure SQLite driver for Termux ──
-# @libsql/client has no Android ARM64 binary, so we need an alternative.
-# Priority: better-sqlite3 (fast, native) → sql.js (pure JS, always works)
-USE_SQLJS=0
-
-BS3_PKG=$(find node_modules -path "*/better-sqlite3/package.json" -not -path "*/.cache/*" 2>/dev/null | head -1)
-[ -n "$BS3_PKG" ] && BS3_DIR=$(dirname "$BS3_PKG")
-
-# --- Check if better-sqlite3 already works ---
-if [ -n "$BS3_DIR" ] && [ -f "$BS3_DIR/build/Release/better_sqlite3.node" ] && \
-   node -e "require('$BS3_DIR/build/Release/better_sqlite3.node')" 2>/dev/null; then
-    echo "  [OK] better-sqlite3 native binary verified"
-    export DATABASE_DRIVER="better-sqlite3"
-else
-    # --- Try downloading prebuilt binary ---
-    if [ -z "$BS3_DIR" ]; then
-        # better-sqlite3 is already declared in optionalDependencies —
-        # just ensure it's installed without rewriting package.json.
-        echo "  [..] Installing better-sqlite3..."
-        run_pnpm install --filter @marinara-engine/server 2>&1 || true
-        BS3_PKG=$(find node_modules -path "*/better-sqlite3/package.json" -not -path "*/.cache/*" 2>/dev/null | head -1)
-        [ -n "$BS3_PKG" ] && BS3_DIR=$(dirname "$BS3_PKG")
-    fi
-
-    if [ -n "$BS3_DIR" ]; then
-        mkdir -p "$BS3_DIR/build/Release"
-        rm -f "$BS3_DIR/build/Release/better_sqlite3.node"
-
-        PREBUILT_URL="https://github.com/Pasta-Devs/Marinara-Engine/releases/latest/download/better_sqlite3-android-arm64.node"
-        echo "  [..] Downloading prebuilt better-sqlite3 for Android ARM64..."
-        if curl -fSL --connect-timeout 15 --max-time 120 \
-             -o "$BS3_DIR/build/Release/better_sqlite3.node" \
-             "$PREBUILT_URL" 2>/dev/null && \
-           node -e "require('$BS3_DIR/build/Release/better_sqlite3.node')" 2>/dev/null; then
-            echo "  [OK] Prebuilt binary downloaded and verified"
-            export DATABASE_DRIVER="better-sqlite3"
-        else
-            rm -f "$BS3_DIR/build/Release/better_sqlite3.node"
-            echo "  [WARN] Prebuilt binary not available or incompatible with Node.js $(node -v)."
-            USE_SQLJS=1
-        fi
-    else
-        USE_SQLJS=1
-    fi
-
-    if [ "$USE_SQLJS" = "1" ]; then
-        echo "  [..] Using sql.js (pure JavaScript SQLite — no compilation needed)"
-        # sql.js is already declared in optionalDependencies —
-        # just ensure it's installed without rewriting package.json.
-        if ! node -e "require.resolve('sql.js')" 2>/dev/null; then
-            run_pnpm install --filter @marinara-engine/server 2>&1 || true
-        fi
-        export DATABASE_DRIVER="sql.js"
-        echo "  [OK] sql.js ready"
-    fi
-fi
-
 # ── Build if needed ──
 if [ ! -d "packages/shared/dist" ]; then
     echo "  [..] Building shared types..."
@@ -293,10 +236,6 @@ if [ ! -d "packages/client/dist" ]; then
     fi
 fi
 
-# ── Database schema ──
-echo "  [..] Syncing database schema..."
-run_pnpm --filter @marinara-engine/server db:push 2>/dev/null || true
-
 # Load .env if present (respects user overrides)
 if [ -f .env ]; then
   set -a
@@ -307,9 +246,6 @@ fi
 export NODE_ENV=production
 export PORT=${PORT:-7860}
 export HOST=${HOST:-0.0.0.0}
-
-# DATABASE_DRIVER was set above during SQLite driver detection
-export DATABASE_DRIVER=${DATABASE_DRIVER:-sql.js}
 
 if [ -n "$SSL_CERT" ] && [ -n "$SSL_KEY" ]; then
   PROTOCOL=https

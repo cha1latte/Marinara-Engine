@@ -320,6 +320,11 @@ export function createLorebooksStorage(db: DB) {
 
     async updateEntry(id: string, input: UpdateLorebookEntryInput) {
       const updates: Record<string, unknown> = { updatedAt: now() };
+      const shouldClearEmbedding =
+        input.name !== undefined ||
+        input.content !== undefined ||
+        input.keys !== undefined ||
+        input.secondaryKeys !== undefined;
       if (input.name !== undefined) updates.name = input.name;
       if (input.content !== undefined) updates.content = input.content;
       if (input.description !== undefined) updates.description = input.description;
@@ -376,6 +381,7 @@ export function createLorebooksStorage(db: DB) {
       if (input.schedule !== undefined) updates.schedule = input.schedule ? JSON.stringify(input.schedule) : null;
       if (input.locked !== undefined) updates.locked = String(input.locked);
       if (input.preventRecursion !== undefined) updates.preventRecursion = String(input.preventRecursion);
+      if (shouldClearEmbedding) updates.embedding = null;
 
       await db.update(lorebookEntries).set(updates).where(eq(lorebookEntries.id, id));
       return this.getEntry(id);

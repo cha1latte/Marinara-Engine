@@ -4,7 +4,7 @@
 import { useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { api } from "../lib/api-client";
+import { api, isJsonRepairApiError } from "../lib/api-client";
 import { chatKeys } from "./use-chats";
 import { useGameModeStore } from "../stores/game-mode.store";
 import { useGameStateStore } from "../stores/game-state.store";
@@ -186,6 +186,10 @@ export function useGameSetup() {
     },
     onError: (err) => {
       console.error("[gameSetup] Error:", err);
+      if (isJsonRepairApiError(err)) {
+        toast.info("The model response needs a quick JSON repair before it can be applied.", { duration: 8000 });
+        return;
+      }
       toast.error(err.message || "Game setup failed. Try again or use a different model.", { duration: 10000 });
     },
   });
@@ -274,6 +278,13 @@ export function useConcludeSession() {
     },
     onError: (err, variables) => {
       console.error("[game/session/conclude] Error:", err);
+      if (isJsonRepairApiError(err)) {
+        toast.info("Review the generated session JSON before applying it.", {
+          id: `game-session-conclude:${variables.chatId}`,
+          duration: 8000,
+        });
+        return;
+      }
       toast.error(err.message || "Failed to end session.", {
         id: `game-session-conclude:${variables.chatId}`,
       });
@@ -301,6 +312,13 @@ export function useRegenerateSessionConclusion() {
     },
     onError: (err, variables) => {
       console.error("[game/session/regenerate-conclusion] Error:", err);
+      if (isJsonRepairApiError(err)) {
+        toast.info("Review the regenerated session JSON before applying it.", {
+          id: `game-session-regenerate:${variables.chatId}:${variables.sessionNumber}`,
+          duration: 8000,
+        });
+        return;
+      }
       toast.error(err.message || "Failed to regenerate session conclusion.", {
         id: `game-session-regenerate:${variables.chatId}:${variables.sessionNumber}`,
       });
@@ -330,6 +348,13 @@ export function useUpdateCampaignProgression() {
     },
     onError: (err, variables) => {
       console.error("[game/session/update-campaign-progression] Error:", err);
+      if (isJsonRepairApiError(err)) {
+        toast.info("Review the generated plot JSON before applying it.", {
+          id: `game-campaign-progression:${variables.chatId}:${variables.sessionNumber}`,
+          duration: 8000,
+        });
+        return;
+      }
       toast.error(err.message || "Failed to update plot arcs.", {
         id: `game-campaign-progression:${variables.chatId}:${variables.sessionNumber}`,
       });
@@ -535,7 +560,7 @@ export function useSyncGameState(activeChatId: string, chatMeta: Record<string, 
     } else if (chatMeta.gameMap && chatMeta.gameMap !== state.currentMap) {
       useGameModeStore.getState().setCurrentMap(chatMeta.gameMap as GameMap);
     }
-    if (chatMeta.gameNpcs) {
+    if (Array.isArray(chatMeta.gameNpcs)) {
       useGameModeStore.getState().setNpcs(chatMeta.gameNpcs as any[]);
     }
     if (chatMeta.gameSessionNumber) {

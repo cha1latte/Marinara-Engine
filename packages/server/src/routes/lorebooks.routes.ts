@@ -354,7 +354,7 @@ export async function lorebooksRoutes(app: FastifyInstance) {
   // ── Vectorize: generate embeddings for all entries in a lorebook ──
 
   app.post<{ Params: { id: string } }>("/:id/vectorize", async (req, reply) => {
-    const body = req.body as { connectionId: string; model: string };
+    const body = req.body as { connectionId: string; model: string; onlyMissing?: boolean };
     if (!body.connectionId || !body.model) {
       return reply.status(400).send({ error: "connectionId and model are required" });
     }
@@ -363,8 +363,15 @@ export async function lorebooksRoutes(app: FastifyInstance) {
     const conn = await connStorage.getWithKey(body.connectionId);
     if (!conn) return reply.status(404).send({ error: "Connection not found" });
 
-    const entries = await storage.listEntries(req.params.id);
-    if (!entries.length) return { vectorized: 0 };
+    const allEntries = await storage.listEntries(req.params.id);
+    if (!allEntries.length) return { vectorized: 0, total: 0, skipped: 0 };
+    const entries = body.onlyMissing
+      ? allEntries.filter((entry) => {
+          const embedding = (entry as Record<string, unknown>).embedding;
+          return !Array.isArray(embedding) || embedding.length === 0;
+        })
+      : allEntries;
+    if (!entries.length) return { vectorized: 0, total: allEntries.length, skipped: allEntries.length };
 
     // Use dedicated embedding base URL if configured, otherwise the connection's base URL
     const embedBaseUrl = conn.embeddingBaseUrl
@@ -381,7 +388,10 @@ export async function lorebooksRoutes(app: FastifyInstance) {
 
     // Build text for each entry: combine name, keys, and content
     const texts = (entries as Array<Record<string, unknown>>).map((e) => {
-      const keys = Array.isArray(e.keys) ? (e.keys as string[]).join(", ") : "";
+      const keys = [
+        ...(Array.isArray(e.keys) ? (e.keys as string[]) : []),
+        ...(Array.isArray(e.secondaryKeys) ? (e.secondaryKeys as string[]) : []),
+      ].join(", ");
       return `${e.name ?? ""}${keys ? ` [${keys}]` : ""}\n${e.content ?? ""}`.trim();
     });
 
@@ -401,6 +411,6 @@ export async function lorebooksRoutes(app: FastifyInstance) {
       }
     }
 
-    return { vectorized, total: entries.length };
+    return { vectorized, total: allEntries.length, skipped: allEntries.length - entries.length };
   });
 }

@@ -26,7 +26,7 @@ import { cn } from "../../lib/utils";
 import { api } from "../../lib/api-client";
 import { useGameStateStore } from "../../stores/game-state.store";
 import { useAgentStore } from "../../stores/agent.store";
-import { useAgentConfigs } from "../../hooks/use-agents";
+import { useAgentConfigs, useCustomAgentRuns } from "../../hooks/use-agents";
 import { useUIStore } from "../../stores/ui.store";
 import type {
   GameState,
@@ -293,6 +293,7 @@ export function RoleplayHUD({
     >
       {/* Actions (Agents + Clear) */}
       <ActionsGroup
+        chatId={chatId}
         isVertical={isVertical}
         agentsOpen={agentsOpen}
         setAgentsOpen={setAgentsOpen}
@@ -494,6 +495,7 @@ function DeferredActionsFallback({ isAgentProcessing }: { isAgentProcessing: boo
 }
 
 interface ActionsGroupProps {
+  chatId: string;
   isVertical: boolean;
   agentsOpen: boolean;
   setAgentsOpen: (v: boolean) => void;
@@ -509,6 +511,7 @@ interface ActionsGroupProps {
 }
 
 function ActionsGroup({
+  chatId,
   isVertical: _isVertical,
   agentsOpen,
   setAgentsOpen,
@@ -529,6 +532,7 @@ function ActionsGroup({
   const toggleEchoChamber = useUIStore((s) => s.toggleEchoChamber);
   const echoMessages = useAgentStore((s) => s.echoMessages);
   const showEcho = enabledAgentTypes.has("echo-chamber");
+  const { data: customAgentRuns = [], isLoading: customAgentRunsLoading } = useCustomAgentRuns(chatId, agentsOpen);
 
   // Position with fixed layout to avoid overflow clipping
   useLayoutEffect(() => {
@@ -560,7 +564,7 @@ function ActionsGroup({
 
   // Badge count — unique agent types that produced results
   const uniqueAgentCount = new Set(thoughtBubbles.map((b) => b.agentId)).size;
-  const badgeCount = uniqueAgentCount + (echoMessages.length > 0 ? 1 : 0);
+  const badgeCount = uniqueAgentCount + customAgentRuns.length + (echoMessages.length > 0 ? 1 : 0);
 
   // ── Shared dropdown portal (used by both desktop & mobile) ──
   const dropdownContent =
@@ -578,6 +582,8 @@ function ActionsGroup({
             thoughtBubbles={thoughtBubbles}
             clearThoughtBubbles={clearThoughtBubbles}
             dismissThoughtBubble={dismissThoughtBubble}
+            customAgentRuns={customAgentRuns}
+            customAgentRunsLoading={customAgentRunsLoading}
             showEcho={showEcho}
             echoChamberOpen={echoChamberOpen}
             toggleEchoChamber={toggleEchoChamber}

@@ -35,6 +35,7 @@
 ---
 
 <a id="screenshots"></a>
+
 <details>
 <summary><h2>Screenshots</h2></summary>
 
@@ -100,7 +101,7 @@
 
 ## Latest Release
 
-Current stable release: **[v1.5.6](https://github.com/Pasta-Devs/Marinara-Engine/releases/tag/v1.5.6)**.
+Current stable release: **[v1.5.7](https://github.com/Pasta-Devs/Marinara-Engine/releases/tag/v1.5.7)**.
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed release notes. Tagged releases use the `vX.Y.Z` format and are published on the [Releases](https://github.com/Pasta-Devs/Marinara-Engine/releases) page.
 
@@ -154,23 +155,24 @@ OpenAI, Anthropic, Google, OpenRouter, NanoGPT, Mistral, Cohere, Pollinations, S
 
 ### Export & Data
 
-Export chats as JSONL or plain text. Fully local SQLite database — all data stays on your machine. No account required.
+Export chats as JSONL or plain text. Fully local file-native storage — all data stays on your machine. No account required.
 
 ---
 
 ## Documentation
 
-| Document                                           | Description                                                     |
-| -------------------------------------------------- | --------------------------------------------------------------- |
-| [docs/INSTALLATION.md](docs/INSTALLATION.md)       | Installation guide index (all platforms)                        |
-| [docs/CONFIGURATION.md](docs/CONFIGURATION.md)     | Environment variables and `.env` reference                      |
-| [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common issues and fixes                                         |
-| [docs/FAQ.md](docs/FAQ.md)                         | Frequently asked questions (LAN access, etc.)                   |
-| [docs/FRONTEND.md](docs/FRONTEND.md)               | Frontend architecture, components, hooks, and API reference     |
-| [android/README.md](android/README.md)             | Android WebView wrapper (APK) guide                             |
-| [CONTRIBUTING.md](CONTRIBUTING.md)                 | Contributor workflow, validation, versioning, and release steps |
-| [CHANGELOG.md](CHANGELOG.md)                       | Release notes                                                   |
-| [CLAUDE.md](CLAUDE.md)                             | Maintainer notes for contributors using Claude                  |
+| Document                                             | Description                                                     |
+| ---------------------------------------------------- | --------------------------------------------------------------- |
+| [docs/INSTALLATION.md](docs/INSTALLATION.md)         | Installation guide index (all platforms)                        |
+| [docs/CONFIGURATION.md](docs/CONFIGURATION.md)       | Environment variables and `.env` reference                      |
+| [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)   | Common issues and fixes                                         |
+| [docs/FAQ.md](docs/FAQ.md)                           | Frequently asked questions (LAN access, etc.)                   |
+| [docs/FRONTEND.md](docs/FRONTEND.md)                 | Frontend architecture, components, hooks, and API reference     |
+| [docs/ARCHITECTURE_MAP.md](docs/ARCHITECTURE_MAP.md) | Code ownership map and module-boundary refactor groundwork      |
+| [android/README.md](android/README.md)               | Android WebView wrapper (APK) guide                             |
+| [CONTRIBUTING.md](CONTRIBUTING.md)                   | Contributor workflow, validation, versioning, and release steps |
+| [CHANGELOG.md](CHANGELOG.md)                         | Release notes                                                   |
+| [CLAUDE.md](CLAUDE.md)                               | Maintainer notes for contributors using Claude                  |
 
 ---
 
@@ -211,6 +213,10 @@ Export chats as JSONL or plain text. Fully local SQLite database — all data st
 - [DarthTheMonster](https://github.com/DarthTheMonster)
 - [Morgul](https://github.com/Morgul)
 - [Kevin Ho](https://github.com/kevin-ho)
+- [Tom DARONDOVAS](https://github.com/LightD31)
+- [Jacob M](https://github.com/jake9000)
+- [Lochalan](https://github.com/Lochalan)
+- [Kolacheee](https://github.com/kolacheee)
 
 ---
 

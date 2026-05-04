@@ -9,14 +9,17 @@ import {
   createMessageSchema,
   getDefaultAgentPrompt,
   nameToXmlTag,
+  resolveMacros,
   summariesPatchSchema,
 } from "@marinara-engine/shared";
 import type { ChatMemoryChunk } from "@marinara-engine/shared";
 import { createChatsStorage } from "../services/storage/chats.storage.js";
+import { createCharactersStorage } from "../services/storage/characters.storage.js";
 import { createConnectionsStorage } from "../services/storage/connections.storage.js";
 import { createRegexScriptsStorage } from "../services/storage/regex-scripts.storage.js";
 import { getLocalSidecarProvider, LOCAL_SIDECAR_MODEL } from "../services/llm/local-sidecar.js";
 import { createLLMProvider } from "../services/llm/provider-registry.js";
+import { generateMissingConversationSummaries } from "../services/conversation/auto-summary.service.js";
 import { wrapContent } from "../services/prompt/format-engine.js";
 import { newId } from "../utils/id-generator.js";
 import { characters, memoryChunks } from "../db/schema/index.js";
@@ -25,6 +28,7 @@ import { existsSync } from "fs";
 import { join } from "path";
 import { DATA_DIR } from "../utils/data-dir.js";
 import { normalizeTimestampOverrides } from "../services/import/import-timestamps.js";
+import { parseExtra } from "./generate/generate-route-utils.js";
 
 export async function chatsRoutes(app: FastifyInstance) {
   const storage = createChatsStorage(app.db);
@@ -133,6 +137,124 @@ export async function chatsRoutes(app: FastifyInstance) {
       weekSummaries: { ...(existing.weekSummaries ?? {}), ...(parsed.data.weekSummaries ?? {}) },
     };
     return storage.updateMetadata(req.params.id, merged);
+  });
+
+  // Generate any missing conversation day/week summaries on demand. This uses
+  // the same summary pipeline as conversation generation, but scans the full
+  // scoped chat history so old failed days remain recoverable.
+  app.post<{ Params: { id: string } }>("/:id/backfill-summaries", async (req, reply) => {
+    const chat = await storage.getById(req.params.id);
+    if (!chat) return reply.status(404).send({ error: "Chat not found" });
+    if (chat.mode !== "conversation") return reply.status(400).send({ error: "Not a conversation chat" });
+
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const maxMissingDays = Math.max(1, Math.min(60, Math.floor(Number(body.maxMissingDays) || 14)));
+    const chatMeta = typeof chat.metadata === "string" ? JSON.parse(chat.metadata) : (chat.metadata ?? {});
+
+    const connections = createConnectionsStorage(app.db);
+    const connId = chat.connectionId ?? (await connections.getDefault())?.id;
+    if (!connId) return reply.status(400).send({ error: "No API connection configured for this chat" });
+    const conn = await connections.getWithKey(connId);
+    if (!conn) return reply.status(400).send({ error: "API connection not found" });
+
+    let baseUrl = conn.baseUrl;
+    if (!baseUrl) {
+      const { PROVIDERS } = await import("@marinara-engine/shared");
+      const providerDef = PROVIDERS[conn.provider as keyof typeof PROVIDERS];
+      baseUrl = providerDef?.defaultBaseUrl ?? "";
+    }
+    if (!baseUrl) return reply.status(400).send({ error: "No base URL for this connection" });
+
+    const characterIds: string[] = Array.isArray(chat.characterIds)
+      ? chat.characterIds
+      : typeof chat.characterIds === "string"
+        ? JSON.parse(chat.characterIds)
+        : [];
+    const charactersStore = createCharactersStorage(app.db);
+    const charIdToName = new Map<string, string>();
+    for (const characterId of characterIds) {
+      const row = await charactersStore.getById(characterId);
+      if (!row) continue;
+      try {
+        const data = JSON.parse(row.data as string);
+        charIdToName.set(characterId, typeof data.name === "string" && data.name.trim() ? data.name : "Character");
+      } catch {
+        charIdToName.set(characterId, "Character");
+      }
+    }
+
+    const personas = await charactersStore.listPersonas();
+    const persona =
+      (chat.personaId ? personas.find((candidate) => candidate.id === chat.personaId) : null) ??
+      personas.find((candidate) => candidate.isActive === "true");
+    const personaName = persona?.name ?? "User";
+
+    const allMessages = await storage.listMessages(req.params.id);
+    let startIdx = 0;
+    for (let i = allMessages.length - 1; i >= 0; i--) {
+      const extra = parseExtra(allMessages[i]!.extra);
+      if (extra.isConversationStart) {
+        startIdx = i;
+        break;
+      }
+    }
+    const scopedMessages = startIdx > 0 ? allMessages.slice(startIdx) : allMessages;
+
+    const provider = createLLMProvider(
+      conn.provider,
+      baseUrl,
+      conn.apiKey,
+      conn.maxContext,
+      conn.openrouterProvider,
+      conn.maxTokensOverride,
+    );
+    const result = await generateMissingConversationSummaries({
+      messages: scopedMessages,
+      metadata: chatMeta,
+      provider,
+      model: conn.model,
+      personaName,
+      charIdToName,
+      rolloverHour: Math.max(0, Math.min(11, Math.floor((chatMeta.dayRolloverHour as number | undefined) ?? 4))),
+      maxMissingDays,
+    });
+
+    for (const failure of result.failedDays) {
+      logger.warn(
+        { chatId: req.params.id, date: failure.date, err: failure.error },
+        "[conversation-summary] manual backfill failed day summary",
+      );
+    }
+    for (const failure of result.failedWeeks) {
+      logger.warn(
+        { chatId: req.params.id, weekKey: failure.weekKey, err: failure.error },
+        "[conversation-summary] manual backfill failed week summary",
+      );
+    }
+
+    const hasNewSummaries =
+      Object.keys(result.newlyGeneratedDays).length > 0 || Object.keys(result.newlyConsolidatedWeeks).length > 0;
+    if (hasNewSummaries) {
+      await storage.patchMetadata(req.params.id, (freshMeta) => {
+        const existingDaySummaries = (freshMeta.daySummaries as Record<string, unknown> | undefined) ?? {};
+        const existingWeekSummaries = (freshMeta.weekSummaries as Record<string, unknown> | undefined) ?? {};
+        return {
+          ...freshMeta,
+          daySummaries: { ...existingDaySummaries, ...result.newlyGeneratedDays },
+          weekSummaries: { ...existingWeekSummaries, ...result.newlyConsolidatedWeeks },
+        };
+      });
+    }
+
+    return {
+      generatedDays: Object.keys(result.newlyGeneratedDays),
+      consolidatedWeeks: Object.keys(result.newlyConsolidatedWeeks),
+      failedDays: result.failedDays,
+      failedWeeks: result.failedWeeks,
+      missingDayCount: result.missingDayCount,
+      processedDayCount: result.processedDayCount,
+      remainingMissingDayCount: result.remainingMissingDayCount,
+    };
   });
 
   // ── Chat Connections (OOC ↔ Roleplay) ──
@@ -328,8 +450,17 @@ export async function chatsRoutes(app: FastifyInstance) {
       const partial = req.body as Record<string, unknown>;
       const updated = await storage.updateMessageExtra(req.params.messageId, partial);
       if (!updated) return reply.status(404).send({ error: "Message not found" });
-      // Keep swipe extra in sync so per-swipe data (like spriteExpressions) persists
-      await storage.updateSwipeExtra(req.params.messageId, updated.activeSwipeIndex, partial);
+      if (Object.prototype.hasOwnProperty.call(partial, "hiddenFromAI")) {
+        // hiddenFromAI is a message-level prompt-context control, so keep it
+        // stable across swipe changes instead of binding it to one swipe.
+        const swipes = await storage.getSwipes(req.params.messageId);
+        for (const swipe of swipes) {
+          await storage.updateSwipeExtra(req.params.messageId, swipe.index, { hiddenFromAI: partial.hiddenFromAI });
+        }
+      } else {
+        // Keep swipe extra in sync so per-swipe data (like spriteExpressions) persists
+        await storage.updateSwipeExtra(req.params.messageId, updated.activeSwipeIndex, partial);
+      }
       return updated;
     },
   );
@@ -560,7 +691,7 @@ export async function chatsRoutes(app: FastifyInstance) {
       try {
         const { createPromptsStorage } = await import("../services/storage/prompts.storage.js");
         const { createCharactersStorage } = await import("../services/storage/characters.storage.js");
-        const { assemblePrompt } = await import("../services/prompt/index.js");
+        const { assemblePrompt, buildPromptMacroContext } = await import("../services/prompt/index.js");
         const presetStore = createPromptsStorage(app.db);
         const charStore = createCharactersStorage(app.db);
 
@@ -703,6 +834,22 @@ export async function chatsRoutes(app: FastifyInstance) {
           })();
 
           const chatChoices = (chatMeta.presetChoices ?? {}) as Record<string, string | string[]>;
+          const promptMacroContext = await buildPromptMacroContext({
+            db: app.db,
+            characterIds,
+            personaName,
+            personaDescription,
+            personaFields,
+            variables: {},
+            groupScenarioOverrideText:
+              typeof chatMeta.groupScenarioText === "string" && (chatMeta.groupScenarioText as string).trim()
+                ? (chatMeta.groupScenarioText as string).trim()
+                : null,
+            lastInput: [...mappedMessages].reverse().find((message) => message.role === "user")?.content,
+            chatId: req.params.id,
+          });
+          const resolvePromptMacros = (value: string) => resolveMacros(value, promptMacroContext);
+
           const assembled = await assemblePrompt({
             db: app.db,
             preset: preset as any,
@@ -865,21 +1012,48 @@ export async function chatsRoutes(app: FastifyInstance) {
             if (!hasCharInfo && charDesc) {
               const hasGroupOverride =
                 typeof chatMeta.groupScenarioText === "string" && (chatMeta.groupScenarioText as string).trim();
+              const characterMacroContext = {
+                ...promptMacroContext,
+                char: charName,
+                characterFields: {
+                  description: charData.description ?? "",
+                  personality: charData.personality ?? "",
+                  scenario: charData.scenario ?? "",
+                  backstory: charData.extensions?.backstory ?? "",
+                  appearance: charData.extensions?.appearance ?? "",
+                  example: charData.mes_example ?? "",
+                },
+              };
+              const resolveCharacterMacros = (value: string) => resolveMacros(value, characterMacroContext);
               const parts: string[] = [];
-              if (charDesc) parts.push(wrapContent(charDesc, "description", wrapFormat, 2));
-              if (charData.personality) parts.push(wrapContent(charData.personality, "personality", wrapFormat, 2));
+              if (charDesc) parts.push(wrapContent(resolveCharacterMacros(charDesc), "description", wrapFormat, 2));
+              if (charData.personality)
+                parts.push(wrapContent(resolveCharacterMacros(charData.personality), "personality", wrapFormat, 2));
               if (charData.scenario && !hasGroupOverride)
-                parts.push(wrapContent(charData.scenario, "scenario", wrapFormat, 2));
+                parts.push(wrapContent(resolveCharacterMacros(charData.scenario), "scenario", wrapFormat, 2));
               if (charData.extensions?.backstory)
-                parts.push(wrapContent(charData.extensions.backstory, "backstory", wrapFormat, 2));
+                parts.push(
+                  wrapContent(resolveCharacterMacros(charData.extensions.backstory), "backstory", wrapFormat, 2),
+                );
               if (charData.extensions?.appearance)
-                parts.push(wrapContent(charData.extensions.appearance, "appearance", wrapFormat, 2));
+                parts.push(
+                  wrapContent(resolveCharacterMacros(charData.extensions.appearance), "appearance", wrapFormat, 2),
+                );
               if (charData.system_prompt)
-                parts.push(wrapContent(charData.system_prompt, "system_prompt", wrapFormat, 2));
+                parts.push(wrapContent(resolveCharacterMacros(charData.system_prompt), "system_prompt", wrapFormat, 2));
               if (charData.mes_example)
-                parts.push(wrapContent(charData.mes_example, "example_dialogue", wrapFormat, 2));
+                parts.push(
+                  wrapContent(resolveCharacterMacros(charData.mes_example), "example_dialogue", wrapFormat, 2),
+                );
               if (charData.post_history_instructions)
-                parts.push(wrapContent(charData.post_history_instructions, "post_history_instructions", wrapFormat, 2));
+                parts.push(
+                  wrapContent(
+                    resolveCharacterMacros(charData.post_history_instructions),
+                    "post_history_instructions",
+                    wrapFormat,
+                    2,
+                  ),
+                );
               if (parts.length > 0) {
                 const block = wrapContent(parts.join("\n"), charName, wrapFormat, 1);
                 const firstSysIdx = assembled.messages.findIndex((m) => m.role === "system");
@@ -899,15 +1073,20 @@ export async function chatsRoutes(app: FastifyInstance) {
               new RegExp(`^#{1,6} ${personaName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "m").test(allContent);
             if (!hasPersonaInfo) {
               const fieldParts: string[] = [];
-              if (personaDescription) fieldParts.push(wrapContent(personaDescription, "description", wrapFormat, 2));
+              if (personaDescription)
+                fieldParts.push(wrapContent(resolvePromptMacros(personaDescription), "description", wrapFormat, 2));
               if (personaFields.personality)
-                fieldParts.push(wrapContent(personaFields.personality, "personality", wrapFormat, 2));
+                fieldParts.push(
+                  wrapContent(resolvePromptMacros(personaFields.personality), "personality", wrapFormat, 2),
+                );
               if (personaFields.backstory)
-                fieldParts.push(wrapContent(personaFields.backstory, "backstory", wrapFormat, 2));
+                fieldParts.push(wrapContent(resolvePromptMacros(personaFields.backstory), "backstory", wrapFormat, 2));
               if (personaFields.appearance)
-                fieldParts.push(wrapContent(personaFields.appearance, "appearance", wrapFormat, 2));
+                fieldParts.push(
+                  wrapContent(resolvePromptMacros(personaFields.appearance), "appearance", wrapFormat, 2),
+                );
               if (personaFields.scenario)
-                fieldParts.push(wrapContent(personaFields.scenario, "scenario", wrapFormat, 2));
+                fieldParts.push(wrapContent(resolvePromptMacros(personaFields.scenario), "scenario", wrapFormat, 2));
               // Include enabled RPG attributes
               if (personaStats?.rpgStats?.enabled) {
                 const rpg = personaStats.rpgStats as {

@@ -1,12 +1,24 @@
 // ──────────────────────────────────────────────
 // Game: Map Wrapper (switches between grid and node)
 // ──────────────────────────────────────────────
-import { useState, useCallback, useEffect, type RefObject } from "react";
+import { useState, useCallback, useEffect, type PointerEvent, type RefObject } from "react";
 import { motion } from "framer-motion";
 import type { GameMap, GameActiveState } from "@marinara-engine/shared";
 import { GameGridMap } from "./GameGridMap";
 import { GameNodeMap } from "./GameNodeMap";
-import { ChevronDown, ChevronUp, Map as MapIcon, Wand2, X, Compass, MessageCircle, Swords, Moon } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  Map as MapIcon,
+  Wand2,
+  X,
+  Compass,
+  MessageCircle,
+  Swords,
+  Moon,
+  Minus,
+  Plus,
+} from "lucide-react";
 import { cn } from "../../lib/utils";
 import { PanelLockButton, useDraggablePanel } from "./DraggablePanel";
 
@@ -16,6 +28,10 @@ const STATE_CONFIG: Record<GameActiveState, { icon: typeof Compass; label: strin
   combat: { icon: Swords, label: "Combat", color: "text-red-300" },
   travel_rest: { icon: Moon, label: "Travel & Rest", color: "text-amber-300" },
 };
+
+const MAP_ZOOM_MIN = 0.75;
+const MAP_ZOOM_MAX = 1.8;
+const MAP_ZOOM_STEP = 0.25;
 
 type TimePhase = "midnight" | "night" | "dawn" | "morning" | "noon" | "afternoon" | "evening";
 
@@ -196,6 +212,62 @@ function buildMapOptions(map: GameMap | null, maps?: GameMap[]): GameMap[] {
   });
 }
 
+function nextMapZoom(current: number, delta: number): number {
+  const next = Math.round((current + delta) * 100) / 100;
+  return Math.min(MAP_ZOOM_MAX, Math.max(MAP_ZOOM_MIN, next));
+}
+
+interface MapZoomControlsProps {
+  zoom: number;
+  onZoomOut: () => void;
+  onZoomIn: () => void;
+}
+
+function MapZoomControls({ zoom, onZoomOut, onZoomIn }: MapZoomControlsProps) {
+  const atMin = zoom <= MAP_ZOOM_MIN;
+  const atMax = zoom >= MAP_ZOOM_MAX;
+
+  const stopPointer = (event: PointerEvent<HTMLDivElement | HTMLButtonElement>) => {
+    event.stopPropagation();
+  };
+
+  return (
+    <div
+      className="absolute right-1.5 top-1.5 z-20 flex h-6 overflow-hidden rounded-md border border-white/15 bg-black/85 shadow-lg shadow-black/35"
+      onPointerDown={stopPointer}
+      title={`Map zoom: ${Math.round(zoom * 100)}%`}
+    >
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          onZoomOut();
+        }}
+        disabled={atMin}
+        className="flex h-full w-5 items-center justify-center text-white/80 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+        title="Zoom out"
+        aria-label="Zoom out map"
+      >
+        <Minus size={11} />
+      </button>
+      <span className="w-px bg-white/15" />
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          onZoomIn();
+        }}
+        disabled={atMax}
+        className="flex h-full w-5 items-center justify-center text-white/80 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+        title="Zoom in"
+        aria-label="Zoom in map"
+      >
+        <Plus size={11} />
+      </button>
+    </div>
+  );
+}
+
 interface GameMapProps {
   map: GameMap | null;
   maps?: GameMap[];
@@ -264,11 +336,19 @@ export function GameMapPanel({
 }: GameMapPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [stateHovered, setStateHovered] = useState(false);
+  const [mapZoom, setMapZoom] = useState(1);
   const { locked, toggleLocked, x, y, handleDragEnd } = useDraggablePanel(chatId, "map");
   const mapOptions = buildMapOptions(map, maps);
   const selectedMapId = viewedMapId ?? getMapId(map);
   const activeMap = activeMapId == null || selectedMapId === activeMapId;
   const mapInteractionDisabled = disabled || !activeMap;
+  const zoomControls = (
+    <MapZoomControls
+      zoom={mapZoom}
+      onZoomOut={() => setMapZoom((current) => nextMapZoom(current, -MAP_ZOOM_STEP))}
+      onZoomIn={() => setMapZoom((current) => nextMapZoom(current, MAP_ZOOM_STEP))}
+    />
+  );
 
   if (!map) {
     return (
@@ -385,9 +465,11 @@ export function GameMapPanel({
             selectedPosition={selectedPosition}
             disabled={mapInteractionDisabled}
             showPartyPosition={activeMap}
+            zoom={mapZoom}
             topLeftAction={
               onGenerateMap ? <MapGenerateButton onGenerateMap={onGenerateMap} disabled={disabled} /> : null
             }
+            topRightAction={zoomControls}
           />
         ) : (
           <GameNodeMap
@@ -396,9 +478,11 @@ export function GameMapPanel({
             selectedNodeId={typeof selectedPosition === "string" ? selectedPosition : null}
             disabled={mapInteractionDisabled}
             showPartyPosition={activeMap}
+            zoom={mapZoom}
             topLeftAction={
               onGenerateMap ? <MapGenerateButton onGenerateMap={onGenerateMap} disabled={disabled} /> : null
             }
+            topRightAction={zoomControls}
           />
         ))}
     </motion.div>
@@ -437,10 +521,18 @@ export function MobileMapButton({
 }: MobileMapButtonProps) {
   const [open, setOpen] = useState(false);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
+  const [mapZoom, setMapZoom] = useState(1);
   const mapOptions = buildMapOptions(map, maps);
   const selectedMapId = viewedMapId ?? getMapId(map);
   const activeMap = activeMapId == null || selectedMapId === activeMapId;
   const mapInteractionDisabled = disabled || !activeMap;
+  const zoomControls = (
+    <MapZoomControls
+      zoom={mapZoom}
+      onZoomOut={() => setMapZoom((current) => nextMapZoom(current, -MAP_ZOOM_STEP))}
+      onZoomIn={() => setMapZoom((current) => nextMapZoom(current, MAP_ZOOM_STEP))}
+    />
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -587,6 +679,7 @@ export function MobileMapButton({
                   selectedPosition={selectedPosition}
                   disabled={mapInteractionDisabled}
                   showPartyPosition={activeMap}
+                  zoom={mapZoom}
                   topLeftAction={
                     onGenerateMap ? (
                       <MapGenerateButton
@@ -599,6 +692,7 @@ export function MobileMapButton({
                       />
                     ) : null
                   }
+                  topRightAction={zoomControls}
                   onCellClick={(x, y) => {
                     onMove({ x, y });
                     setOpen(false);
@@ -611,6 +705,7 @@ export function MobileMapButton({
                   selectedNodeId={selectedNode}
                   disabled={mapInteractionDisabled}
                   showPartyPosition={activeMap}
+                  zoom={mapZoom}
                   topLeftAction={
                     onGenerateMap ? (
                       <MapGenerateButton
@@ -623,6 +718,7 @@ export function MobileMapButton({
                       />
                     ) : null
                   }
+                  topRightAction={zoomControls}
                 />
               )}
             </div>

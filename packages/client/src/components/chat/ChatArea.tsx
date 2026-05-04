@@ -62,6 +62,25 @@ import { ChatCommonOverlays } from "./ChatCommonOverlays";
 
 export type { CharacterMap };
 
+const normalizeSpriteDisplayValue = (value: unknown, fallback: number, min: number, max: number): number => {
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.max(min, Math.min(max, numeric));
+};
+
+const parseMetadataRecord = (raw: unknown): Record<string, any> => {
+  if (!raw) return {};
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return typeof raw === "object" ? (raw as Record<string, any>) : {};
+};
+
 const ChatConversationSurface = lazy(async () => {
   const module = await import("./ChatConversationSurface");
   return { default: module.ChatConversationSurface };
@@ -309,10 +328,12 @@ export function ChatArea() {
   const chatMeta = useMemo(() => {
     if (!chat) return {};
     const raw = (chat as unknown as { metadata?: string | Record<string, unknown> }).metadata;
-    return typeof raw === "string" ? JSON.parse(raw) : (raw ?? {});
+    return parseMetadataRecord(raw);
   }, [chat]);
   const spriteCharacterIds: string[] = Array.isArray(chatMeta.spriteCharacterIds) ? chatMeta.spriteCharacterIds : [];
   const spritePosition: SpriteSide = chatMeta.spritePosition === "right" ? "right" : "left";
+  const spriteScale = normalizeSpriteDisplayValue(chatMeta.spriteScale, 1, 0.5, 1.75);
+  const spriteOpacity = normalizeSpriteDisplayValue(chatMeta.spriteOpacity, 1, 0.15, 1);
   const spritePlacements = useMemo(
     () => normalizeSpritePlacements(chatMeta.spritePlacements),
     [chatMeta.spritePlacements],
@@ -750,6 +771,13 @@ export function ChatArea() {
   const handleToggleConversationStart = useCallback(
     (messageId: string, current: boolean) => {
       updateMessageExtra.mutate({ messageId, extra: { isConversationStart: !current } });
+    },
+    [updateMessageExtra],
+  );
+
+  const handleToggleHiddenFromAI = useCallback(
+    (messageId: string, current: boolean) => {
+      updateMessageExtra.mutate({ messageId, extra: { hiddenFromAI: !current } });
     },
     [updateMessageExtra],
   );
@@ -1211,14 +1239,20 @@ export function ChatArea() {
   // Unified layout — mode-aware rendering
   // ═══════════════════════════════════════════════
   const msgPayload = (messages ?? []).map((m) => ({ role: m.role, characterId: m.characterId, content: m.content }));
-  const chatList = (allChats as Array<{ id: string; name: string }> | undefined) ?? [];
+  const chatList =
+    (allChats as Array<{ id: string; name: string; metadata?: string | Record<string, unknown> }> | undefined) ?? [];
   const connectedChatName = chat?.connectedChatId
     ? chatList.find((item) => item.id === chat.connectedChatId)?.name
     : undefined;
+  const activeSceneChat = chatMeta.activeSceneChatId
+    ? chatList.find((item) => item.id === chatMeta.activeSceneChatId)
+    : undefined;
+  const activeSceneMeta = parseMetadataRecord(activeSceneChat?.metadata);
+  const hasActiveLinkedScene = activeSceneChat && activeSceneMeta.sceneStatus === "active";
   const isSceneChat = chatMeta.sceneStatus === "active" || Boolean(chatMeta.sceneOriginChatId);
   const conversationSceneInfo =
-    chatMeta.activeSceneChatId && chatList.some((item) => item.id === chatMeta.activeSceneChatId)
-      ? { variant: "origin" as const, sceneChatId: chatMeta.activeSceneChatId }
+    chatMeta.activeSceneChatId && hasActiveLinkedScene
+      ? { variant: "origin" as const, sceneChatId: chatMeta.activeSceneChatId, sceneChatName: activeSceneChat.name }
       : chatMeta.sceneStatus === "active"
         ? {
             variant: "scene" as const,
@@ -1431,6 +1465,8 @@ export function ChatArea() {
           spriteCharacterIds={spriteCharacterIds}
           spriteExpressions={spriteExpressions}
           spritePlacements={spritePlacements}
+          spriteScale={spriteScale}
+          spriteOpacity={spriteOpacity}
           hasCustomSpritePlacements={hasCustomSpritePlacements}
           spriteArrangeMode={spriteArrangeMode}
           enabledAgentTypes={enabledAgentTypes}
@@ -1469,6 +1505,7 @@ export function ChatArea() {
           onEdit={handleEdit}
           onSetActiveSwipe={handleSetActiveSwipe}
           onToggleConversationStart={handleToggleConversationStart}
+          onToggleHiddenFromAI={handleToggleHiddenFromAI}
           onPeekPrompt={handlePeekPrompt}
           onBranch={isSceneChat ? undefined : handleBranch}
           onCloneSceneFromHere={isSceneChat ? handleCloneSceneFromHere : undefined}

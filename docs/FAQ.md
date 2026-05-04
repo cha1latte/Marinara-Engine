@@ -80,9 +80,9 @@ Connected chats (the link between a conversation and a roleplay or game) are int
 
 **Roleplay → Conversation (automatic):** the roleplay's summary and recent messages are pulled into the conversation's context every turn, so DM characters always know what's happening in the story. Roleplay characters can also break the fourth wall back into the DM by wrapping text in `<ooc>...</ooc>` tags.
 
-**Conversation → Roleplay (manual, via tags):** the conversation's raw messages are *not* injected into the roleplay. To bridge content the other direction, the conversation character uses one of two OOC tags:
+**Conversation → Roleplay (manual, via tags):** the conversation's raw messages are _not_ injected into the roleplay. To bridge content the other direction, the conversation character uses one of two OOC tags:
 
-- `<influence>...</influence>` — one-shot steer for the *next* roleplay turn, then consumed.
+- `<influence>...</influence>` — one-shot steer for the _next_ roleplay turn, then consumed.
 - `<note>...</note>` — durable; appears on every roleplay turn until you clear it from the chat settings drawer. Use this for facts the roleplay character should keep remembering.
 
 This is by design — pulling raw DM messages into every roleplay turn would inflate the prompt and dilute the story. If you want something from the DM to stick in the roleplay, ask the conversation character to wrap it in a `<note>`.

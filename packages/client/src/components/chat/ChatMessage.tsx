@@ -17,6 +17,7 @@ import {
   X,
   Flag,
   Eye,
+  Circle,
   Brain,
   Languages,
   Volume2,
@@ -125,6 +126,7 @@ interface ChatMessageProps {
   onEdit?: (messageId: string, content: string) => void;
   onSetActiveSwipe?: (messageId: string, index: number) => void;
   onToggleConversationStart?: (messageId: string, current: boolean) => void;
+  onToggleHiddenFromAI?: (messageId: string, current: boolean) => void;
   onPeekPrompt?: () => void;
   onBranch?: (messageId: string) => void;
   onCloneSceneFromHere?: (messageId: string) => void;
@@ -436,6 +438,7 @@ export const ChatMessage = memo(function ChatMessage({
   onEdit,
   onSetActiveSwipe,
   onToggleConversationStart,
+  onToggleHiddenFromAI,
   onPeekPrompt,
   onBranch,
   onCloneSceneFromHere,
@@ -621,6 +624,7 @@ export const ChatMessage = memo(function ChatMessage({
     return typeof message.extra === "string" ? JSON.parse(message.extra) : message.extra;
   }, [message.extra]);
   const isConversationStart = !!extra.isConversationStart;
+  const isHiddenFromAI = extra.hiddenFromAI === true;
   const thinking = extra.thinking as string | undefined;
 
   // Remove an attachment from this message (keeps it in gallery)
@@ -1258,6 +1262,7 @@ export const ChatMessage = memo(function ChatMessage({
                 isGrouped && (isUser ? "rounded-tr-2xl" : "rounded-tl-2xl"),
                 isStreaming && "rpg-streaming",
                 isConversationStart && "ring-amber-400/30",
+                isHiddenFromAI && "ring-amber-300/35 saturate-75",
                 editing && "w-full",
               )}
               style={{
@@ -1448,6 +1453,17 @@ export const ChatMessage = memo(function ChatMessage({
                 className={isConversationStart ? "text-amber-400/80 hover:text-amber-300" : undefined}
                 dark
               />
+              {onToggleHiddenFromAI && (
+                <ActionBtn
+                  icon={
+                    isHiddenFromAI ? <Circle size={MESSAGE_ACTION_ICON_SIZE} /> : <X size={MESSAGE_ACTION_ICON_SIZE} />
+                  }
+                  onClick={() => onToggleHiddenFromAI(message.id, isHiddenFromAI)}
+                  title={isHiddenFromAI ? "Unhide from AI" : "Hide from AI"}
+                  className={isHiddenFromAI ? "text-amber-400/90 hover:text-amber-300" : undefined}
+                  dark
+                />
+              )}
               {isLastAssistantMessage && !isUser && (
                 <ActionBtn
                   icon={<Eye size={MESSAGE_ACTION_ICON_SIZE} />}

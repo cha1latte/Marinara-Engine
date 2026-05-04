@@ -37,7 +37,7 @@ cd Marinara-Engine
 start.bat
 ```
 
-`start.bat` handles the rest: it aligns pnpm to the repo-pinned version, installs dependencies, builds the app, ensures the database schema is up to date, and opens the app in your browser.
+`start.bat` handles the rest: it aligns pnpm to the repo-pinned version, installs dependencies, builds the app, prepares local file-backed storage, and opens the app in your browser.
 
 ### Manual Setup
 
@@ -48,7 +48,6 @@ git clone https://github.com/Pasta-Devs/Marinara-Engine.git
 cd Marinara-Engine
 pnpm install
 pnpm build
-pnpm db:push
 pnpm start
 ```
 
@@ -87,7 +86,6 @@ git fetch origin main
 git merge --ff-only origin/main
 pnpm install
 pnpm build
-pnpm db:push
 ```
 
 Then restart the server.

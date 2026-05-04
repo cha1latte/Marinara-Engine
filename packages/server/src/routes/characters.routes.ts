@@ -59,6 +59,24 @@ export async function charactersRoutes(app: FastifyInstance) {
     return char;
   });
 
+  app.get<{ Params: { id: string } }>("/:id/versions", async (req, reply) => {
+    const char = await storage.getById(req.params.id);
+    if (!char) return reply.status(404).send({ error: "Character not found" });
+    return storage.listVersions(req.params.id);
+  });
+
+  app.post<{ Params: { id: string; versionId: string } }>("/:id/versions/:versionId/restore", async (req, reply) => {
+    const restored = await storage.restoreVersion(req.params.id, req.params.versionId);
+    if (!restored) return reply.status(404).send({ error: "Character version not found" });
+    return restored;
+  });
+
+  app.delete<{ Params: { id: string; versionId: string } }>("/:id/versions/:versionId", async (req, reply) => {
+    const deleted = await storage.deleteVersion(req.params.id, req.params.versionId);
+    if (!deleted) return reply.status(404).send({ error: "Character version not found" });
+    return reply.status(204).send();
+  });
+
   app.post("/", async (req) => {
     const input = createCharacterSchema.parse(req.body);
     const body = req.body as Record<string, unknown>;
@@ -80,7 +98,15 @@ export async function charactersRoutes(app: FastifyInstance) {
     const update = updateCharacterSchema.parse(req.body);
     const avatarPath = typeof body.avatarPath === "string" ? body.avatarPath : undefined;
     const comment = typeof body.comment === "string" ? body.comment : undefined;
-    return storage.update(req.params.id, update.data ?? {}, avatarPath, { comment });
+    const versionSource = typeof body.versionSource === "string" ? body.versionSource : undefined;
+    const versionReason = typeof body.versionReason === "string" ? body.versionReason : undefined;
+    const skipVersionSnapshot = body.skipVersionSnapshot === true;
+    return storage.update(req.params.id, update.data ?? {}, avatarPath, {
+      comment,
+      versionSource,
+      versionReason,
+      skipVersionSnapshot,
+    });
   });
 
   app.delete<{ Params: { id: string } }>("/:id", async (req, reply) => {

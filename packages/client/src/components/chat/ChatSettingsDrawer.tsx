@@ -190,6 +190,12 @@ function normalizeAgentMaxTokensInputValue(value: unknown): number {
   return Math.max(1, Math.min(MAX_AGENT_MAX_TOKENS, Math.trunc(value)));
 }
 
+function normalizeSpriteDisplayValue(value: unknown, fallback: number, min: number, max: number): number {
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.max(min, Math.min(max, numeric));
+}
+
 function isEnabledFlag(value: unknown): boolean {
   return value === true || value === "true" || value === "1";
 }
@@ -269,7 +275,19 @@ export function ChatSettingsDrawer({
   const activeToolIds: string[] = metadata.activeToolIds ?? [];
   const spriteCharacterIds: string[] = Array.isArray(metadata.spriteCharacterIds) ? metadata.spriteCharacterIds : [];
   const spritePosition: "left" | "right" = metadata.spritePosition === "right" ? "right" : "left";
+  const spriteScale = normalizeSpriteDisplayValue(metadata.spriteScale, 1, 0.5, 1.75);
+  const spriteOpacity = normalizeSpriteDisplayValue(metadata.spriteOpacity, 1, 0.15, 1);
+  const [spriteScalePercent, setSpriteScalePercent] = useState(() => Math.round(spriteScale * 100));
+  const [spriteOpacityPercent, setSpriteOpacityPercent] = useState(() => Math.round(spriteOpacity * 100));
   const hasCustomSpritePlacements = Object.keys(normalizeSpritePlacements(metadata.spritePlacements)).length > 0;
+
+  useEffect(() => {
+    setSpriteScalePercent(Math.round(spriteScale * 100));
+  }, [spriteScale]);
+
+  useEffect(() => {
+    setSpriteOpacityPercent(Math.round(spriteOpacity * 100));
+  }, [spriteOpacity]);
 
   const agentConfigsByType = useMemo(() => {
     const map = new Map<string, AgentConfigRow>();
@@ -538,6 +556,30 @@ export function ChatSettingsDrawer({
     }
     updateMeta.mutate({ id: chat.id, spritePlacements: {} });
   }, [chat.id, onResetSpritePlacements, updateMeta]);
+
+  const setSpriteScale = useCallback(
+    (nextPercent: number) => {
+      const clampedPercent = Math.max(50, Math.min(175, nextPercent));
+      setSpriteScalePercent(clampedPercent);
+      updateMeta.mutate({
+        id: chat.id,
+        spriteScale: clampedPercent / 100,
+      });
+    },
+    [chat.id, updateMeta],
+  );
+
+  const setSpriteOpacity = useCallback(
+    (nextPercent: number) => {
+      const clampedPercent = Math.max(15, Math.min(100, nextPercent));
+      setSpriteOpacityPercent(clampedPercent);
+      updateMeta.mutate({
+        id: chat.id,
+        spriteOpacity: clampedPercent / 100,
+      });
+    },
+    [chat.id, updateMeta],
+  );
 
   // ── Character drag-and-drop reordering ──
   const [dragIdx, setDragIdx] = useState<number | null>(null);
@@ -2805,7 +2847,7 @@ export function ChatSettingsDrawer({
                       {lorebookKeeperActive
                         ? "Read-behind uses assistant messages: 0 means the newest eligible reply, 1 waits one reply, and backfill only processes messages Lorebook Keeper has not already saved."
                         : activeAgentIds.length === 0
-                          ? "Lorebook Keeper is not currently enabled in workspace defaults. These chat settings will apply once it is enabled."
+                          ? "Lorebook Keeper is not currently enabled in this chat. These chat settings will apply once it is enabled."
                           : "Lorebook Keeper is not in this chat's active agent list. Add it below to make these settings take effect."}
                     </p>
                   </div>
@@ -2908,7 +2950,7 @@ export function ChatSettingsDrawer({
                       {expressionActive
                         ? "Only added characters with uploaded sprites appear here. You can enable up to 3 at a time."
                         : activeAgentIds.length === 0
-                          ? "Expression Engine is not currently enabled in workspace defaults. These sprite choices will apply once it is enabled."
+                          ? "Expression Engine is not currently enabled in this chat. These sprite choices will apply once it is enabled."
                           : "Expression Engine is not in this chat's active agent list. Add it below to show sprites during roleplay."}
                     </p>
 
@@ -2970,6 +3012,27 @@ export function ChatSettingsDrawer({
                               Right
                             </button>
                           </div>
+                        </div>
+
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                          <SpriteRangeSlider
+                            label="Size"
+                            value={spriteScalePercent}
+                            min={50}
+                            max={175}
+                            step={5}
+                            suffix="%"
+                            onChange={setSpriteScale}
+                          />
+                          <SpriteRangeSlider
+                            label="Opacity"
+                            value={spriteOpacityPercent}
+                            min={15}
+                            max={100}
+                            step={5}
+                            suffix="%"
+                            onChange={setSpriteOpacity}
+                          />
                         </div>
 
                         <p className="mt-2 text-[0.5625rem] leading-relaxed text-[var(--muted-foreground)]">
@@ -3390,27 +3453,24 @@ export function ChatSettingsDrawer({
                     })}
                   </select>
                   <p className="text-[0.625rem] text-[var(--muted-foreground)]">
-                    Messages sent before this hour count as part of the previous day. Pick a time you&apos;re
-                    never chatting, so a late-night session doesn&apos;t get cut off mid-conversation.
+                    Messages sent before this hour count as part of the previous day. Pick a time you&apos;re never
+                    chatting, so a late-night session doesn&apos;t get cut off mid-conversation.
                   </p>
                   {rolloverTouchedThisSession &&
                     (((metadata.daySummaries as Record<string, unknown> | undefined) &&
                       Object.keys(metadata.daySummaries as Record<string, unknown>).length > 0) ||
                       ((metadata.weekSummaries as Record<string, unknown> | undefined) &&
                         Object.keys(metadata.weekSummaries as Record<string, unknown>).length > 0)) && (
-                    <div className="flex items-start gap-1.5 rounded-md bg-amber-400/10 px-2 py-1.5 ring-1 ring-amber-400/20">
-                      <AlertTriangle
-                        size="0.75rem"
-                        className="mt-[0.125rem] shrink-0 text-amber-400/80"
-                      />
-                      <p className="text-[0.625rem] text-amber-400/80 leading-snug">
-                        Existing summaries were built with the previous setting. For today, messages near the
-                        rollover hour may be duplicated or missing from the prompt. From tomorrow onward, new
-                        day summaries will line up correctly. To adjust an older summary, use{" "}
-                        <span className="font-medium">Edit Summaries</span> above.
-                      </p>
-                    </div>
-                  )}
+                      <div className="flex items-start gap-1.5 rounded-md bg-amber-400/10 px-2 py-1.5 ring-1 ring-amber-400/20">
+                        <AlertTriangle size="0.75rem" className="mt-[0.125rem] shrink-0 text-amber-400/80" />
+                        <p className="text-[0.625rem] text-amber-400/80 leading-snug">
+                          Existing summaries were built with the previous setting. For today, messages near the rollover
+                          hour may be duplicated or missing from the prompt. From tomorrow onward, new day summaries
+                          will line up correctly. To adjust an older summary, use{" "}
+                          <span className="font-medium">Edit Summaries</span> above.
+                        </p>
+                      </div>
+                    )}
                 </div>
 
                 {/* Recent message tail */}
@@ -3427,17 +3487,15 @@ export function ChatSettingsDrawer({
                     value={(metadata.summaryTailMessages as number | undefined) ?? 10}
                     onChange={(e) => {
                       const raw = Number(e.target.value);
-                      const clamped = Number.isFinite(raw)
-                        ? Math.max(0, Math.min(50, Math.floor(raw)))
-                        : 10;
+                      const clamped = Number.isFinite(raw) ? Math.max(0, Math.min(50, Math.floor(raw))) : 10;
                       updateMeta.mutate({ id: chat.id, summaryTailMessages: clamped });
                     }}
                     className="w-full rounded-lg bg-[var(--secondary)] px-3 py-2 text-xs outline-none ring-1 ring-transparent transition-shadow focus:ring-[var(--primary)]/40"
                   />
                   <p className="text-[0.625rem] text-[var(--muted-foreground)]">
-                    How many recent messages to keep word-for-word, even once they&apos;re summarized. Helps
-                    characters pick up the actual flow of last night&apos;s conversation instead of just the
-                    gist. Set to <span className="font-medium">0</span> to disable.
+                    How many recent messages to keep word-for-word, even once they&apos;re summarized. Helps characters
+                    pick up the actual flow of last night&apos;s conversation instead of just the gist. Set to{" "}
+                    <span className="font-medium">0</span> to disable.
                   </p>
                 </div>
               </div>
@@ -4651,6 +4709,46 @@ function PickerDropdown({
       {/* Footer — always visible below the scrollable list */}
       {footer}
     </div>
+  );
+}
+
+// ── Sprite display slider ──
+function SpriteRangeSlider({
+  label,
+  value,
+  min,
+  max,
+  step,
+  suffix,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  suffix: string;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="flex min-w-0 flex-col gap-1.5 rounded-lg bg-[var(--secondary)]/50 px-2.5 py-2 text-[0.625rem] text-[var(--muted-foreground)]">
+      <span className="flex items-center justify-between gap-2">
+        <span className="font-medium text-[var(--foreground)]">{label}</span>
+        <span className="rounded-full bg-[var(--background)] px-2 py-0.5 text-[0.5625rem] tabular-nums text-[var(--muted-foreground)] ring-1 ring-[var(--border)]">
+          {value}
+          {suffix}
+        </span>
+      </span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+        className="h-8 w-full cursor-pointer accent-[var(--primary)]"
+      />
+    </label>
   );
 }
 

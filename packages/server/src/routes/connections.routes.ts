@@ -5,6 +5,7 @@ import type { FastifyInstance } from "fastify";
 import { createConnectionSchema, inferImageSource } from "@marinara-engine/shared";
 import { createConnectionsStorage } from "../services/storage/connections.storage.js";
 import { createLLMProvider } from "../services/llm/provider-registry.js";
+import { resolveConnectionImageDefaults } from "../services/image/image-generation-defaults.js";
 
 function resolveImageGenerationSource(conn: Record<string, unknown>, baseUrl: string): string {
   const explicitSource = typeof conn.imageGenerationSource === "string" ? conn.imageGenerationSource : "";
@@ -295,6 +296,7 @@ export async function connectionsRoutes(app: FastifyInstance) {
     const imgApiKey = conn.apiKey || "";
     const imgSource = conn.imageGenerationSource || imgModel;
     const imgServiceHint = conn.imageService || imgSource;
+    const imageDefaults = resolveConnectionImageDefaults(conn);
 
     const BASE_PROMPT = "plate of spaghetti with marinara sauce";
 
@@ -306,6 +308,7 @@ export async function connectionsRoutes(app: FastifyInstance) {
         width: 512,
         height: 512,
         comfyWorkflow: conn.comfyuiWorkflow || undefined,
+        imageDefaults,
       });
       return {
         success: true,
@@ -428,7 +431,16 @@ function normalizeModelsResponse(provider: string, json: Record<string, unknown>
     }
 
     case "cohere": {
-      // Cohere returns { models: [{ name: "command-r-plus", ... }] }
+      // Cohere native v2 returns { models: [{ name: "command-r-plus", ... }] }.
+      // The OpenAI compatibility endpoint returns { data: [{ id: "command-r-plus", ... }] }.
+      const data = (json.data ?? []) as Array<{
+        id?: string;
+        name?: string;
+      }>;
+      if (data.length > 0) {
+        return data.map((m) => ({ id: m.id ?? "", name: m.name ?? m.id ?? "" })).filter((m) => m.id);
+      }
+
       const models = (json.models ?? []) as Array<{
         name?: string;
         endpoints?: string[];

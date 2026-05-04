@@ -55,6 +55,7 @@ interface ConversationViewProps {
   sceneInfo?: {
     variant: "origin" | "scene";
     sceneChatId?: string;
+    sceneChatName?: string;
     originChatId?: string;
     description?: string;
   };
@@ -867,7 +868,9 @@ export function ConversationView({
         )}
 
         {/* Scene banner — inline at bottom of messages (origin variant only) */}
-        {sceneInfo?.variant === "origin" && <SceneBanner variant="origin" sceneChatId={sceneInfo.sceneChatId} />}
+        {sceneInfo?.variant === "origin" && (
+          <SceneBanner variant="origin" sceneChatId={sceneInfo.sceneChatId} sceneChatName={sceneInfo.sceneChatName} />
+        )}
 
         <div ref={messagesEndRef} className="h-1" />
       </div>
@@ -923,6 +926,7 @@ export function ConversationView({
                 })
             : undefined
         }
+        onPeekPrompt={onPeekPrompt}
       />
     </div>
   );

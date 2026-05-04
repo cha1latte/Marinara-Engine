@@ -75,7 +75,7 @@ export interface CombatStatusTag {
 export interface ParsedGmTags {
   /** Content with all command tags stripped. */
   cleanContent: string;
-  /** Music tag to play, e.g. "music:combat:epic-battle" */
+  /** Music tag to play, e.g. "music:combat:fantasy:intense:epic-battle" */
   music: string | null;
   /** One-shot SFX tags */
   sfx: string[];

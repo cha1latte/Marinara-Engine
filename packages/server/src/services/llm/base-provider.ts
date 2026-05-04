@@ -71,6 +71,8 @@ export interface ChatOptions {
   enableCaching?: boolean;
   /** Callback for streaming thinking/reasoning content */
   onThinking?: (chunk: string) => void;
+  /** Prefer provider APIs that expose reasoning summaries when available */
+  captureReasoning?: boolean;
   /** Callback for streaming text tokens as they arrive (used in tool path) */
   onToken?: (chunk: string) => void;
   /** Enable extended thinking (reasoning models) */
@@ -93,6 +95,8 @@ export interface ChatOptions {
   onChatCompletionsReasoning?: (metadata: Record<string, unknown>) => void;
   /** Force a specific response format (e.g. { type: "json_object" }) */
   responseFormat?: { type: string };
+  /** Raw provider request parameters merged into the outgoing request body. */
+  customParameters?: Record<string, unknown>;
 }
 
 /** Token usage statistics returned by the model */
@@ -514,6 +518,11 @@ export abstract class BaseLLMProvider {
     return openrouterProvider ?? this.defaultOpenrouterProvider;
   }
 
+  protected applyCustomParameters(body: Record<string, unknown>, options: ChatOptions): void {
+    if (!options.customParameters || Object.keys(options.customParameters).length === 0) return;
+    deepMergeRequestBody(body, options.customParameters);
+  }
+
   /**
    * Stream a chat completion. Yields text chunks, optionally returns usage on completion.
    */
@@ -566,5 +575,21 @@ export abstract class BaseLLMProvider {
     }
     const json = (await res.json()) as { data: Array<{ embedding: number[] }> };
     return json.data.map((d) => d.embedding);
+  }
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function deepMergeRequestBody(target: Record<string, unknown>, source: Record<string, unknown>): void {
+  for (const [key, value] of Object.entries(source)) {
+    if (value === undefined) continue;
+    const current = target[key];
+    if (isPlainRecord(current) && isPlainRecord(value)) {
+      deepMergeRequestBody(current, value);
+    } else {
+      target[key] = value;
+    }
   }
 }

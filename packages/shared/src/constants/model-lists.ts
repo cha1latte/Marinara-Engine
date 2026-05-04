@@ -278,6 +278,17 @@ export const COHERE_MODELS: KnownModel[] = [
 
 export const OPENROUTER_MODELS: KnownModel[] = [];
 
+// ── xAI / Grok (OpenAI-compatible API) ──
+
+export const XAI_MODELS: KnownModel[] = [
+  // Official xAI docs recommend Grok 4.3 for standard chat API usage.
+  { id: "grok-4.3", name: "Grok 4.3", context: 1000000, maxOutput: 0 },
+  // Reasoning docs mention this model as auto-reasoning without configurable effort.
+  { id: "grok-4-1-fast", name: "Grok 4.1 Fast", context: 2000000, maxOutput: 0 },
+  // Multi-agent research model; uses Responses API and reasoning.effort for 4 vs 16 agents.
+  { id: "grok-4.20-multi-agent", name: "Grok 4.20 Multi-Agent", context: 2000000, maxOutput: 0 },
+];
+
 // ── Additional providers with static lists in SillyTavern ──
 
 // Groq (from #model_groq_select)
@@ -541,6 +552,7 @@ export const MODEL_LISTS: Record<APIProvider, KnownModel[]> = {
   cohere: COHERE_MODELS,
   openrouter: OPENROUTER_MODELS,
   nanogpt: [], // NanoGPT aggregator — models fetched dynamically via API
+  xai: XAI_MODELS,
   // Seed OAI-compatible endpoints with the OpenAI catalog; remote /models still merge on top.
   custom: OPENAI_MODELS,
   image_generation: IMAGE_GEN_MODELS,

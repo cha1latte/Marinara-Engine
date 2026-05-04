@@ -9,6 +9,7 @@
 // the list. Inspired by SillyTavern's World Info layout.
 // ──────────────────────────────────────────────
 import { useState, useEffect, useCallback, useMemo, useRef, type DragEvent as ReactDragEvent } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useLorebook,
   useUpdateLorebook,
@@ -20,6 +21,7 @@ import {
   useCreateLorebookFolder,
   useUpdateLorebookEntry,
   useReorderLorebookFolders,
+  lorebookKeys,
 } from "../../hooks/use-lorebooks";
 import { useCharacters, usePersonas } from "../../hooks/use-characters";
 import { useConnections } from "../../hooks/use-connections";
@@ -1014,7 +1016,7 @@ export function LorebookEditor() {
                 </div>
 
                 {/* Vectorize (Embeddings) */}
-                <VectorizeSection lorebookId={lorebookId!} entryCount={entries.length} />
+                <VectorizeSection lorebookId={lorebookId!} entries={entries} />
               </div>
             )}
 
@@ -1382,13 +1384,20 @@ export function LorebookEditor() {
 }
 
 /** Vectorize lorebook entries for semantic matching. */
-function VectorizeSection({ lorebookId, entryCount }: { lorebookId: string; entryCount: number }) {
+function VectorizeSection({ lorebookId, entries }: { lorebookId: string; entries: LorebookEntry[] }) {
+  const queryClient = useQueryClient();
   const { data: rawConnections } = useConnections();
   const connections = (rawConnections ?? []) as Array<{ id: string; name: string; embeddingModel?: string }>;
   const embeddingConnections = connections.filter((c) => c.embeddingModel);
   const [selectedConnectionId, setSelectedConnectionId] = useState<string>("");
   const [vectorizing, setVectorizing] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
+  const entryCount = entries.length;
+  const vectorizedCount = entries.filter(
+    (entry) => Array.isArray(entry.embedding) && entry.embedding.length > 0,
+  ).length;
+  const missingCount = Math.max(0, entryCount - vectorizedCount);
+  const allVectorized = entryCount > 0 && missingCount === 0;
 
   // Auto-select first embedding connection
   useEffect(() => {
@@ -1406,9 +1415,16 @@ function VectorizeSection({ lorebookId, entryCount }: { lorebookId: string; entr
       const res = await api.post(`/lorebooks/${lorebookId}/vectorize`, {
         connectionId: selectedConnectionId,
         model: conn?.embeddingModel ?? "",
+        onlyMissing: !allVectorized,
       });
-      const data = res as { vectorized: number };
-      setResult({ success: true, message: `Vectorized ${data.vectorized} entries` });
+      const data = res as { vectorized: number; total?: number; skipped?: number };
+      await queryClient.invalidateQueries({ queryKey: lorebookKeys.entries(lorebookId) });
+      setResult({
+        success: true,
+        message: allVectorized
+          ? `Re-vectorized ${data.vectorized} entries`
+          : `Vectorized ${data.vectorized} missing entries`,
+      });
     } catch (err) {
       setResult({ success: false, message: err instanceof Error ? err.message : "Vectorization failed" });
     } finally {
@@ -1422,6 +1438,20 @@ function VectorizeSection({ lorebookId, entryCount }: { lorebookId: string; entr
         <Sparkles size="0.875rem" className="text-violet-400" />
         <h4 className="text-xs font-semibold">Semantic Search (Embeddings)</h4>
         <HelpTooltip text="Vectorize entries to enable semantic matching. Entries will be found by meaning, not just keywords. Requires a connection with an Embedding Model configured." />
+      </div>
+      <div className="flex flex-wrap items-center gap-2 text-[0.625rem] text-[var(--muted-foreground)]">
+        <span
+          className={cn(
+            "inline-flex items-center gap-1 rounded-full px-2 py-0.5 ring-1",
+            allVectorized
+              ? "bg-emerald-400/10 text-emerald-400 ring-emerald-400/20"
+              : "bg-[var(--background)]/70 ring-[var(--border)]",
+          )}
+        >
+          {allVectorized ? <Check size="0.625rem" /> : <AlertTriangle size="0.625rem" />}
+          {vectorizedCount}/{entryCount} entries vectorized
+        </span>
+        {missingCount > 0 && <span>{missingCount} still need embeddings.</span>}
       </div>
       {embeddingConnections.length === 0 ? (
         <p className="text-[0.625rem] text-[var(--muted-foreground)]">
@@ -1447,7 +1477,11 @@ function VectorizeSection({ lorebookId, entryCount }: { lorebookId: string; entr
               className="flex items-center gap-1.5 rounded-xl bg-violet-500/15 px-3 py-1.5 text-xs font-medium text-violet-400 ring-1 ring-violet-500/30 transition-all hover:bg-violet-500/25 active:scale-[0.98] disabled:opacity-50"
             >
               {vectorizing ? <Loader2 size="0.75rem" className="animate-spin" /> : <Sparkles size="0.75rem" />}
-              Vectorize {entryCount} entries
+              {vectorizing
+                ? "Vectorizing..."
+                : allVectorized
+                  ? `Re-vectorize ${entryCount} entries`
+                  : `Vectorize ${missingCount} missing`}
             </button>
           </div>
           {result && (

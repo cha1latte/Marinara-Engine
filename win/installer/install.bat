@@ -11,7 +11,7 @@ set "INSTALL_ERROR="
 echo.
 echo  +==========================================+
 echo  ^|   Marinara Engine - Windows Installer     ^|
-echo  ^|   v1.5.6                                  ^|
+echo  ^|   v1.5.7                                  ^|
 
 echo  +==========================================+
 echo.
@@ -230,11 +230,6 @@ if %errorlevel% neq 0 (
     goto :fatal
 )
 echo  [OK] Build complete
-
-:: -- Sync database --
-echo  [..] Setting up database...
-call :run_pnpm --filter @marinara-engine/server db:push 2>nul
-echo  [OK] Database ready
 
 :: -- Create desktop shortcut --
 echo  [..] Creating desktop shortcut...

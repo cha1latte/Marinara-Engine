@@ -14,11 +14,14 @@ import {
 } from "react";
 import {
   ChevronDown,
+  CheckCircle2,
+  CircleDashed,
   FileText,
   GripVertical,
   Hash,
   Key,
   Lock,
+  Regex,
   Save,
   Settings2,
   ToggleLeft,
@@ -126,6 +129,7 @@ export function LorebookEntryRow({
   const [localOrder, setLocalOrder] = useState(entry.order);
   const [localProbability, setLocalProbability] = useState<number>(entry.probability ?? 100);
   const [localName, setLocalName] = useState(entry.name);
+  const [localUseRegex, setLocalUseRegex] = useState(entry.useRegex ?? false);
 
   // Re-sync local state when the upstream entry changes (e.g. after refetch)
   // so we don't show stale values, but avoid clobbering an in-flight edit.
@@ -140,6 +144,7 @@ export function LorebookEntryRow({
     setLocalOrder(entry.order);
     setLocalProbability(entry.probability ?? 100);
     setLocalName(entry.name);
+    setLocalUseRegex(entry.useRegex ?? false);
   }, [entry]);
 
   const patch = useCallback(
@@ -165,6 +170,16 @@ export function LorebookEntryRow({
       patch({ enabled: next });
     },
     [localEnabled, patch],
+  );
+
+  const handleUseRegexToggle = useCallback(
+    (e: ReactMouseEvent) => {
+      e.stopPropagation();
+      const next = !localUseRegex;
+      setLocalUseRegex(next);
+      patch({ useRegex: next });
+    },
+    [localUseRegex, patch],
   );
 
   const handleNameCommit = useCallback(() => {
@@ -195,6 +210,7 @@ export function LorebookEntryRow({
   );
 
   const showDepthInput = localPosition === 2;
+  const isVectorized = Array.isArray(entry.embedding) && entry.embedding.length > 0;
 
   return (
     <div
@@ -262,6 +278,22 @@ export function LorebookEntryRow({
           )}
         </button>
 
+        {/* Regex key matching toggle */}
+        <button
+          type="button"
+          aria-label={localUseRegex ? "Disable regex key matching" : "Enable regex key matching"}
+          title={localUseRegex ? "Regex key matching enabled" : "Plain-text key matching"}
+          onClick={handleUseRegexToggle}
+          className={cn(
+            "shrink-0 rounded p-0.5 transition-colors",
+            localUseRegex
+              ? "bg-orange-400/15 text-orange-300 ring-1 ring-orange-400/25"
+              : "text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]",
+          )}
+        >
+          <Regex size="0.875rem" />
+        </button>
+
         {/* Status dot + name */}
         <span
           className={cn("h-2 w-2 shrink-0 rounded-full", STATUS_DOT_COLOR[localStatus])}
@@ -281,6 +313,20 @@ export function LorebookEntryRow({
           placeholder="Untitled entry"
           className="min-w-0 flex-1 truncate bg-transparent px-1 text-sm font-medium outline-none transition-colors hover:bg-[var(--accent)]/40 focus:bg-[var(--accent)]/40 focus:ring-1 focus:ring-[var(--ring)] rounded"
         />
+
+        <span
+          className={cn(
+            "inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[0.5625rem] font-medium ring-1",
+            isVectorized
+              ? "bg-emerald-400/10 text-emerald-400 ring-emerald-400/20"
+              : "bg-[var(--background)]/55 text-[var(--muted-foreground)] ring-[var(--border)]",
+          )}
+          title={isVectorized ? "This entry has been vectorized" : "This entry has not been vectorized yet"}
+          aria-label={isVectorized ? "Entry vectorized" : "Entry not vectorized"}
+        >
+          {isVectorized ? <CheckCircle2 size="0.625rem" /> : <CircleDashed size="0.625rem" />}
+          <span className="hidden sm:inline">{isVectorized ? "Vectorized" : "Not vectorized"}</span>
+        </span>
 
         {/* Lock badge (display-only on the row; toggled inside the drawer) */}
         {entry.locked && (
@@ -624,10 +670,9 @@ function ExpandedDrawer({ entry, lorebookId }: { entry: LorebookEntry; lorebookI
         </p>
       </FieldGroup>
 
-      {/* Toggles row — note: enable / constant / selective are now on the row header,
+      {/* Toggles row — note: enable / regex / constant / selective are now on the row header,
           so they are intentionally omitted from this block to avoid duplication. */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <ToggleButton label="Regex" value={form.useRegex ?? false} onChange={(v) => update({ useRegex: v })} />
         <ToggleButton
           label="Whole Words"
           value={form.matchWholeWords ?? false}

@@ -2,6 +2,71 @@
 
 This file is the release-notes source of truth for Marinara Engine. Reuse these entries when publishing GitHub Releases for tags in the `vX.Y.Z` format.
 
+## [1.5.7]
+
+### Added
+
+- Game mode interrupt button that allows you to interrupt the GM (with or without consequences to your game).
+- Various improvements to the Game mode's combat and inventory systems, more cinematic battles, better UI handling, and more overall mechanics.
+- Game mode map scaling.
+- New permanent tag that persists in Roleplay mode if a character passed you important information in Conversation mode.
+- Improvements to the Knowledge Router agent.
+- Storing the Conversation Theme background gradient separately for dark and light color schemes, so switching OS/browser theme automatically loads the correct gradient.
+- Custom agents now have a chat memory.
+- Prompt overrides the registry for image generation.
+- Active filter tab in Lorebooks.
+- Compressed Lorebooks.
+- Customizable generation settings for local image generation.
+- When generating schedules, they now receive context from the conversation chats you had with a character.
+- Hide/unhide messages in Roleplay mode.
+- Alternative display of logs for Game mode.
+- Custom agents can now choose a result type, including Text Rewrite for post-processing agents that edit the generated reply.
+- Setting to enable showing and editing image prompts before they're sent.
+- Setting to change the image dimensions for generation.
+- Various small QOL changes.
+- Custom agents' outputs can now be edited in the Agents button in the Roleplay mode.
+- Custom parameters field.
+- Sliders to control the sprite's size and opacity in Roleplay mode.
+- Custom activity statuses for the user.
+- Vectorized Lorebook entries are now visibly marked.
+- Character card version history with compare and restore controls.
+- Prefills.
+- File-backed storage is now the default: legacy SQLite data is imported into JSON files under `DATA_DIR/storage`, backups include those files, and `STORAGE_BACKEND=sqlite` remains as an advanced compatibility escape hatch.
+- Allowed token size outputs in agents.
+- Lorebook folders.
+- Game mode setup remembers custom genre, tone, setting, and goal options from previous games.
+
+### Fixed
+
+- Game mode dark screen error addressed.
+- Removed the persistent SQLite database as the default live storage path, reducing release-to-release migration failures.
+- File-backed migration now merges every known legacy database location and performs a one-time repair for snapshots that missed chats during early v1.5.7 testing.
+- On mobile Roleplay, the branch quick-switcher now lives inside the three-dot toolbar menu, so it no longer overlaps the Agents' controls.
+- Switching chats doesn't stop the generation of the previously triggered one.
+- Cross-conversations confusions addressed.
+- {{user}} and {{char}} macros now work in all modes.
+- Injections at a specific depth now work correctly.
+- Added Spotify OAuth redirect URI handling and manual paste-back.
+- [Start the game] is being sent twice upon starting the game.
+- Expression Engine now retrieves all the available sprites correctly upon retry.
+- Fixed unstable message pagination cursor.
+- Various errors were addressed.
+- Advanced parameters are now respected by local endpoints.
+- Improved the quality of some prompts.
+- Ensured the daily/weekly summaries trigger consistently.
+- We now handle assets in Game mode better.
+- Conversation mode characters no longer reply to themselves; instead, they reply to you.
+- Drag-and-drop on mobiles now works.
+- Custom agents can now rewrite your messages.
+- Full-body sprites in game mode now get updated properly.
+- Deleted characters from group chat no longer appear as Unknown.
+- Roleplay setup and connection setup dialogs now fit short screens with internal scrolling, and Custom Parameters starts empty with an example placeholder.
+- File-backed storage now supports Lorebook folders during generation and migration.
+- Deleting one saved character card version now leaves the rest of the version history intact.
+- Removed the legacy database setup step from the installer flow.
+- Fresh installs no longer install the old `better-sqlite3` or `sql.js` SQLite fallback packages.
+- Various minor UI bugs.
+
 ## [1.5.6]
 
 ### Added
@@ -17,10 +82,7 @@ This file is the release-notes source of truth for Marinara Engine. Reuse these 
 - Pygmalion, Jenny, and DataCat added to the Browser.
 - Pinnable taskbar shortcut via custom launcher.
 - Universal Tool Support for agents.
-- Custom agents can now maintain durable chat memory with read/append summary tools, metadata patch streaming, and configurable trigger cadence.
-- Prompt override APIs can now customize image-generation templates for sprites, NPC portraits, backgrounds, scene illustrations, and conversation selfies.
 - New Knowledge Router agent.
-- Active filter in the Lorebooks panel for lorebooks currently relevant to the selected chat.
 - You can now link Personas to Lorebooks.
 - Drag-and-drop Lorebook entries.
 - Added ElevenLabs for TTS support.

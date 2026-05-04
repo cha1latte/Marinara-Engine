@@ -33,6 +33,7 @@ export const generateRequestSchema = z.object({
   impersonate: z.boolean().optional().default(false),
   streaming: z.boolean().optional().default(true),
   userStatus: z.enum(["active", "idle", "dnd"]).optional().default("active"),
+  userActivity: z.string().max(120).optional().default(""),
   mentionedCharacterNames: z.array(z.string()).optional().default([]),
   forCharacterId: z.string().nullable().optional().default(null),
   generationGuide: z.string().nullable().optional().default(null),

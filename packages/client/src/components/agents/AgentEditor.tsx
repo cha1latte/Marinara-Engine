@@ -63,6 +63,7 @@ import {
   getDefaultBuiltInAgentSettings,
   getDefaultAgentPrompt,
   type AgentPhase,
+  type AgentResultType,
   type ToolDefinition,
 } from "@marinara-engine/shared";
 
@@ -125,6 +126,29 @@ function clampAgentMaxTokens(value: number): number {
   return Math.max(MIN_AGENT_MAX_TOKENS, Math.min(MAX_AGENT_MAX_TOKENS, Math.trunc(value)));
 }
 
+type CustomAgentResultType = Extract<AgentResultType, "context_injection" | "text_rewrite">;
+
+const CUSTOM_AGENT_RESULT_TYPE_OPTIONS: Array<{
+  id: CustomAgentResultType;
+  label: string;
+  description: string;
+}> = [
+  {
+    id: "context_injection",
+    label: "Context Injection",
+    description: "Adds text context before generation, or records informational text after generation.",
+  },
+  {
+    id: "text_rewrite",
+    label: "Text Rewrite",
+    description: 'Runs after the reply and expects JSON with "editedText" plus "changes" to replace the message.',
+  },
+];
+
+function normalizeCustomResultType(value: unknown): CustomAgentResultType {
+  return value === "text_rewrite" ? "text_rewrite" : "context_injection";
+}
+
 // ═══════════════════════════════════════════════
 //  Main Editor
 // ═══════════════════════════════════════════════
@@ -170,6 +194,7 @@ export function AgentEditor() {
   const [localRunInterval, setLocalRunInterval] = useState<number | "">("");
   const [customCadenceInputFocused, setCustomCadenceInputFocused] = useState(false);
   const [localPrompt, setLocalPrompt] = useState("");
+  const [localResultType, setLocalResultType] = useState<CustomAgentResultType>("context_injection");
   const [localInjectAsSection, setLocalInjectAsSection] = useState(false);
   const [localEnabledTools, setLocalEnabledTools] = useState<string[]>([]);
   const [localSpotifyClientId, setLocalSpotifyClientId] = useState("");
@@ -229,6 +254,7 @@ export function AgentEditor() {
       setLocalSourceFileIds(settings.sourceFileIds ?? []);
       setLocalAutoGenerateAvatars(settings.autoGenerateAvatars ?? false);
       setLocalUseAvatarReferences(settings.useAvatarReferences ?? false);
+      setLocalResultType(normalizeCustomResultType(settings.resultType));
       setLocalPrompt(dbConfig.promptTemplate || "");
     } else if (builtIn) {
       setLocalName(builtIn.name);
@@ -246,6 +272,7 @@ export function AgentEditor() {
       setLocalSourceFileIds([]);
       setLocalAutoGenerateAvatars(false);
       setLocalUseAvatarReferences(false);
+      setLocalResultType("context_injection");
       setLocalPrompt("");
     } else {
       // Brand new custom agent — start empty
@@ -264,6 +291,7 @@ export function AgentEditor() {
       setLocalSourceFileIds([]);
       setLocalAutoGenerateAvatars(false);
       setLocalUseAvatarReferences(false);
+      setLocalResultType("context_injection");
       setLocalPrompt("");
     }
     setDirty(false);
@@ -388,15 +416,18 @@ export function AgentEditor() {
   const handleSave = useCallback(async () => {
     if (!agentDetailId) return;
     setSaveError(null);
+    const isEditingCustomAgent = isCustomAgent || isNewCustomAgent;
+    const savedPhase = isEditingCustomAgent && localResultType === "text_rewrite" ? "post_processing" : localPhase;
 
     const payload = {
       name: localName,
       description: localDescription,
-      phase: localPhase,
+      phase: savedPhase,
       enabled: true,
       connectionId: localConnectionId || null,
       promptTemplate: localPrompt,
       settings: {
+        ...(isEditingCustomAgent ? { resultType: localResultType } : {}),
         ...(localContextSize !== "" ? { contextSize: Number(localContextSize) } : {}),
         ...(localMaxTokens !== "" ? { maxTokens: clampAgentMaxTokens(localMaxTokens) } : {}),
         ...(localRunInterval !== "" ? { runInterval: Number(localRunInterval) } : {}),
@@ -442,6 +473,7 @@ export function AgentEditor() {
     localName,
     localDescription,
     localPhase,
+    localResultType,
     localConnectionId,
     localImageConnectionId,
     localPrompt,
@@ -457,6 +489,8 @@ export function AgentEditor() {
     localUseAvatarReferences,
     dbConfig,
     builtIn,
+    isCustomAgent,
+    isNewCustomAgent,
     isKnowledgeRetrievalAgent,
     updateAgent,
     createAgent,
@@ -664,6 +698,49 @@ export function AgentEditor() {
             <p className="mt-1.5 text-[0.625rem] text-[var(--muted-foreground)]">{phaseMeta.description}</p>
           </FieldGroup>
 
+          {(isCustomAgent || isNewCustomAgent) && (
+            <FieldGroup
+              label="Result Type"
+              icon={<FileText size="0.875rem" className="text-[var(--primary)]" />}
+              help="Controls how Marinara interprets this custom agent's output. Use Text Rewrite for post-processing agents that edit the generated reply."
+            >
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {CUSTOM_AGENT_RESULT_TYPE_OPTIONS.map((option) => {
+                  const isActive = localResultType === option.id;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => {
+                        setLocalResultType(option.id);
+                        if (option.id === "text_rewrite") setLocalPhase("post_processing");
+                        markDirty();
+                      }}
+                      className={cn(
+                        "flex flex-col items-start gap-1 rounded-xl p-3 text-left text-xs ring-1 transition-all",
+                        isActive
+                          ? "bg-[var(--primary)]/10 ring-[var(--primary)] text-[var(--foreground)]"
+                          : "ring-[var(--border)] text-[var(--muted-foreground)] hover:bg-[var(--accent)]",
+                      )}
+                    >
+                      <span className="font-semibold">{option.label}</span>
+                      <span className="text-[0.625rem] leading-tight">{option.description}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {localResultType === "text_rewrite" && (
+                <p className="mt-2 rounded-lg border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-[0.625rem] leading-relaxed text-amber-200">
+                  Text rewrite agents always save as Post-Processing. Their prompt should return JSON like{" "}
+                  <code className="rounded bg-black/20 px-1 py-0.5">
+                    {'{"editedText":"...","changes":[{"description":"..."}]}'}
+                  </code>
+                  .
+                </p>
+              )}
+            </FieldGroup>
+          )}
+
           {/* ── Connection Override ── */}
           <FieldGroup
             label="Connection Override"
@@ -829,23 +906,23 @@ export function AgentEditor() {
                   Max Output Tokens
                 </label>
                 <div className="flex items-center gap-3">
-                    <input
-                      type="number"
-                      min={MIN_AGENT_MAX_TOKENS}
-                      max={MAX_AGENT_MAX_TOKENS}
-                      value={localMaxTokens}
+                  <input
+                    type="number"
+                    min={MIN_AGENT_MAX_TOKENS}
+                    max={MAX_AGENT_MAX_TOKENS}
+                    value={localMaxTokens}
                     onChange={(e) => {
-                        setLocalMaxTokens(normalizeAgentMaxTokensInput(e.target.value));
-                        markDirty();
-                      }}
-                      onBlur={() => {
-                        if (localMaxTokens !== "") {
-                          setLocalMaxTokens(clampAgentMaxTokens(localMaxTokens));
-                        }
-                      }}
-                      placeholder={String(DEFAULT_AGENT_MAX_TOKENS)}
-                      className="w-32 rounded-xl bg-[var(--secondary)] px-3 py-2.5 text-sm tabular-nums ring-1 ring-[var(--border)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
-                    />
+                      setLocalMaxTokens(normalizeAgentMaxTokensInput(e.target.value));
+                      markDirty();
+                    }}
+                    onBlur={() => {
+                      if (localMaxTokens !== "") {
+                        setLocalMaxTokens(clampAgentMaxTokens(localMaxTokens));
+                      }
+                    }}
+                    placeholder={String(DEFAULT_AGENT_MAX_TOKENS)}
+                    className="w-32 rounded-xl bg-[var(--secondary)] px-3 py-2.5 text-sm tabular-nums ring-1 ring-[var(--border)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+                  />
                   <span className="text-[0.6875rem] text-[var(--muted-foreground)]">tokens</span>
                 </div>
               </div>
@@ -1619,7 +1696,9 @@ export function AgentEditor() {
             <p className="mt-1 text-[0.625rem] text-[var(--muted-foreground)]">
               {builtIn
                 ? "Leave empty to use the built-in default prompt. Edit to override with your own instructions."
-                : "Write the full system prompt for this custom agent."}
+                : localResultType === "text_rewrite"
+                  ? 'Write the full system prompt for this custom editor. It must return JSON with "editedText" and "changes".'
+                  : "Write the full system prompt for this custom agent."}
             </p>
 
             {/* Default prompt preview removed — now shown inline above */}
@@ -1685,6 +1764,13 @@ export function AgentEditor() {
               <p>
                 <strong className="text-[var(--foreground)]">Phase:</strong> {phaseMeta.label} — {phaseMeta.description}
               </p>
+              {(isCustomAgent || isNewCustomAgent) && (
+                <p>
+                  <strong className="text-[var(--foreground)]">Result Type:</strong>{" "}
+                  {CUSTOM_AGENT_RESULT_TYPE_OPTIONS.find((option) => option.id === localResultType)?.label ??
+                    localResultType}
+                </p>
+              )}
               <p>
                 <strong className="text-[var(--foreground)]">DB Status:</strong>{" "}
                 {dbConfig ? `Persisted (ID: ${dbConfig.id})` : "Not yet saved — click Save to persist"}

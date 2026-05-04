@@ -8,7 +8,7 @@ ARG BUILD_COMMIT
 WORKDIR /app
 
 # Copy workspace config first (layer cache for deps)
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY packages/shared/package.json packages/shared/
 COPY packages/server/package.json packages/server/
 COPY packages/client/package.json packages/client/
@@ -50,7 +50,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy workspace config
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY packages/shared/package.json packages/shared/
 COPY packages/server/package.json packages/server/
 COPY packages/client/package.json packages/client/
@@ -70,13 +70,13 @@ COPY --from=builder /app/packages/shared/dist packages/shared/dist
 COPY --from=builder /app/packages/server/dist packages/server/dist
 COPY --from=builder /app/packages/client/dist packages/client/dist
 
-# Ensure /app/data exists for runtime use (fonts, default backgrounds, db, uploads)
+# Ensure /app/data exists for runtime use (file storage, uploads, generated assets)
 RUN mkdir -p /app/data
 
 # Point the server at /app/data regardless of working directory
 ENV DATA_DIR=/app/data
 
-# The SQLite database + user uploads live in /app/data at runtime.
+# File-native storage + user uploads live in /app/data at runtime.
 # Mount a volume here for persistence.
 VOLUME /app/data
 

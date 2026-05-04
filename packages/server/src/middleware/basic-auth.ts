@@ -77,7 +77,9 @@ function loadConfig(): CachedConfig | null {
   }
 
   if (cached.resolved && !cached.resolved.announced) {
-    logger.info(`[basic-auth] HTTP Basic Auth enabled (realm="${cached.resolved.realm}", user="${cached.resolved.user}")`);
+    logger.info(
+      `[basic-auth] HTTP Basic Auth enabled (realm="${cached.resolved.realm}", user="${cached.resolved.user}")`,
+    );
     cached.resolved.announced = true;
   }
 

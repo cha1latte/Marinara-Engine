@@ -18,14 +18,14 @@ If you see an error like `EPERM: operation not permitted, open 'C:\Program Files
 
 ## Data Seems Missing After an Update
 
-If your chats or presets appear to be missing after updating, **do not delete any data folders yet**. Recent path changes can make the app open a different SQLite file without erasing the old one.
+If your chats or presets appear to be missing after updating, **do not delete any data folders yet**. Marinara v1.5.7 stores live user data in `DATA_DIR/storage`, and older installs may also have a legacy `marinara-engine.db` file that can be imported.
 
 Check both local data locations:
 
 1. `packages/server/data/`
 2. `data/`
 
-Look for `marinara-engine.db` plus any `-wal` and `-shm` companion files. The server logs the resolved `DATA_DIR` and database path on startup to help identify which file is active.
+Look for `storage/manifest.json` first. If it does not exist, look for `marinara-engine.db` plus any `-wal` and `-shm` companion files. The server logs the resolved `DATA_DIR`, `FILE_STORAGE_DIR`, and legacy import source on startup. On the first v1.5.7 launch, Marinara imports the old DB into `DATA_DIR/storage` automatically.
 
 ---
 
@@ -49,15 +49,9 @@ See the [LAN / mobile access FAQ](FAQ.md#how-do-i-access-marinara-engine-from-my
 
 ---
 
-## Database Errors on Startup
+## Legacy Database Errors on Startup
 
-If you see Prisma or Drizzle migration errors:
-
-```bash
-pnpm db:push
-```
-
-This ensures the database schema matches the current codebase. It is safe to run multiple times.
+The default v1.5.7 storage path no longer uses the persistent SQLite file as live storage. If you see legacy database or Drizzle migration errors after updating, remove any custom `STORAGE_BACKEND=sqlite` override and restart Marinara. The file-native backend imports the old `marinara-engine.db` automatically on first launch and then runs without database migrations.
 
 ---
 

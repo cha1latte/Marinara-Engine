@@ -452,27 +452,6 @@ export const BUILT_IN_AGENTS: BuiltInAgentMeta[] = [
     defaultInjectAsSection: true,
     category: "writer",
   },
-
-  // ── Game Agents ──
-  {
-    id: "game-master",
-    name: "Game Master",
-    description:
-      "Narrates the RPG, handles dice rolls, manages NPCs, combat triggers, state transitions, map updates, story pacing, and session flow. The primary responder in Game mode.",
-    phase: "pre_generation",
-    enabledByDefault: false,
-    defaultInjectAsSection: true,
-    category: "misc",
-  },
-  {
-    id: "party-player",
-    name: "Party Player",
-    description:
-      "Controls non-player party members autonomously — their dialogue, actions, and decisions. Only sees public narration and party chat (no GM secrets like story arcs or plot twists).",
-    phase: "parallel",
-    enabledByDefault: false,
-    category: "misc",
-  },
 ];
 
 export const BUILT_IN_AGENT_RUN_INTERVAL_DEFAULTS: Readonly<Record<string, number>> = {

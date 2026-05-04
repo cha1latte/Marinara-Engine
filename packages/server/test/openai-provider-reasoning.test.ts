@@ -232,3 +232,15 @@ test("responses reasoning config is omitted for non-reasoning models", () => {
   assert.equal("reasoning" in body, false);
   assert.equal("enable_thinking" in body, false);
 });
+
+test("responses requests include fallback input for system-only prompts", () => {
+  const provider = new OpenAIProvider("https://example.com/v1", "test-key") as any;
+  const body = provider.buildResponsesBody([{ role: "system", content: "You are helpful." }], {
+    model: "gpt-5.4",
+    stream: false,
+    maxTokens: 128,
+  } satisfies ChatOptions) as Record<string, unknown>;
+
+  assert.equal(body.instructions, "You are helpful.");
+  assert.deepEqual(body.input, [{ role: "user", content: "Continue." }]);
+});

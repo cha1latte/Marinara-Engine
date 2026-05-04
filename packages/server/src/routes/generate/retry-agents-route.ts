@@ -19,11 +19,13 @@ import { createAgentsStorage } from "../../services/storage/agents.storage.js";
 import { createCharactersStorage } from "../../services/storage/characters.storage.js";
 import { createChatsStorage } from "../../services/storage/chats.storage.js";
 import { createConnectionsStorage } from "../../services/storage/connections.storage.js";
+import { resolveConnectionImageDefaults } from "../../services/image/image-generation-defaults.js";
+import { loadImageGenerationUserSettings } from "../../services/image/image-generation-settings.js";
 import { createGameStateStorage } from "../../services/storage/game-state.storage.js";
 import { createLorebooksStorage } from "../../services/storage/lorebooks.storage.js";
 import { syncGameMapMetaPartyPosition } from "../../services/game/map-position.service.js";
 import { gameStateSnapshots as gameStateSnapshotsTable } from "../../db/schema/index.js";
-import { parseExtra, parseGameStateRow, resolveBaseUrl } from "./generate-route-utils.js";
+import { isMessageHiddenFromAI, parseExtra, parseGameStateRow, resolveBaseUrl } from "./generate-route-utils.js";
 import {
   buildHistoricalLorebookKeeperContext,
   getLorebookKeeperBackfillTargets,
@@ -574,6 +576,20 @@ async function applyRetryResultEffects(args: {
   const chatMeta = parseExtra(chat.metadata) as Record<string, unknown>;
 
   for (const result of sortedResults) {
+    if (result.success && result.type === "text_rewrite" && result.data && typeof result.data === "object") {
+      try {
+        const rewriteData = result.data as Record<string, unknown>;
+        const editedText = (rewriteData.editedText as string) ?? "";
+        const changes = (rewriteData.changes as Array<{ description: string }>) ?? [];
+        if (retryMessageId && editedText && changes.length > 0) {
+          await chats.updateMessageContent(retryMessageId, editedText);
+          sendSseEvent(reply, { type: "text_rewrite", data: { editedText, changes } });
+        }
+      } catch {
+        // Non-critical patching failure.
+      }
+    }
+
     if (result.success && result.type === "game_state_update" && result.data && typeof result.data === "object") {
       try {
         const gs = result.data as Record<string, unknown>;
@@ -811,7 +827,6 @@ async function applyRetryResultEffects(args: {
         const imagePrompt = ((illData.prompt as string) ?? "").trim();
         const negativePrompt = ((illData.negativePrompt as string) ?? "").trim();
         const style = ((illData.style as string) ?? "").trim();
-        const aspectRatio = ((illData.aspectRatio as string) ?? "portrait").trim();
         const illCharacters = Array.isArray(illData.characters) ? (illData.characters as string[]) : [];
 
         if (shouldGenerate && imagePrompt) {
@@ -838,6 +853,8 @@ async function applyRetryResultEffects(args: {
               const imgApiKey = imgConnFull.apiKey || "";
               const imgSource = (imgConnFull as any).imageGenerationSource || imgModel;
               const imgServiceHint = imgConnFull.imageService || imgSource;
+              const imageDefaults = resolveConnectionImageDefaults(imgConnFull);
+              const imageSettings = await loadImageGenerationUserSettings(app.db);
 
               const chatMeta = typeof chat.metadata === "string" ? JSON.parse(chat.metadata) : (chat.metadata ?? {});
               const selfieRes = (chatMeta.selfieResolution as string) ?? "";
@@ -849,15 +866,9 @@ async function applyRetryResultEffects(args: {
               if (parsedW > 0 && parsedH > 0) {
                 imgWidth = parsedW;
                 imgHeight = parsedH;
-              } else if (aspectRatio === "portrait") {
-                imgWidth = 512;
-                imgHeight = 768;
-              } else if (aspectRatio === "square") {
-                imgWidth = 512;
-                imgHeight = 512;
               } else {
-                imgWidth = 768;
-                imgHeight = 512;
+                imgWidth = imageSettings.selfie.width;
+                imgHeight = imageSettings.selfie.height;
               }
 
               let fullPrompt = style ? `${style}, ${imagePrompt}` : imagePrompt;
@@ -921,6 +932,7 @@ async function applyRetryResultEffects(args: {
                 width: imgWidth,
                 height: imgHeight,
                 comfyWorkflow: (imgConnFull as any).comfyuiWorkflow || undefined,
+                imageDefaults,
                 referenceImage,
                 referenceImages,
               });
@@ -1047,7 +1059,11 @@ export async function registerRetryAgentsRoute(app: FastifyInstance) {
             break;
           }
         }
-        const recentMessages = startIdx > 0 ? allMessages.slice(startIdx) : allMessages;
+        const scopedMessages = startIdx > 0 ? allMessages.slice(startIdx) : allMessages;
+        const supportsHiddenFromAI = chat.mode === "roleplay" || chat.mode === "visual_novel";
+        const recentMessages = supportsHiddenFromAI
+          ? scopedMessages.filter((message: any) => !isMessageHiddenFromAI(message))
+          : scopedMessages;
         const lastAssistant = [...recentMessages].reverse().find((message: any) => message.role === "assistant");
         const { enabledConfigs, resolvedAgents } = await resolveRetryAgents({
           agentTypes,

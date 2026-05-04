@@ -18,7 +18,7 @@ import {
   type SlashCommand,
   type SlashCommandContext,
 } from "../../lib/slash-commands";
-import { resolveInputMacrosForChat } from "../../lib/chat-macros";
+import { isPromptPreviewMacro, resolveInputMacrosForChat } from "../../lib/chat-macros";
 import { cn, getAvatarCropStyle } from "../../lib/utils";
 import { QuickConnectionSwitcher } from "./QuickConnectionSwitcher";
 import { QuickPersonaSwitcher } from "./QuickPersonaSwitcher";
@@ -88,9 +88,15 @@ interface ConversationInputProps {
     conversationStatus?: "online" | "idle" | "dnd" | "offline";
     conversationActivity?: string;
   }>;
+  onPeekPrompt?: () => void;
 }
 
-export function ConversationInput({ characterNames = [], groupResponseOrder, chatCharacters }: ConversationInputProps) {
+export function ConversationInput({
+  characterNames = [],
+  groupResponseOrder,
+  chatCharacters,
+  onPeekPrompt,
+}: ConversationInputProps) {
   const [hasInput, setHasInput] = useState(false);
   const [completions, setCompletions] = useState<SlashCommand[]>([]);
   const [selectedCompletion, setSelectedCompletion] = useState(0);
@@ -290,6 +296,19 @@ export function ConversationInput({ characterNames = [], groupResponseOrder, cha
     if (!raw && attachments.length === 0) {
       return;
     }
+
+    if (isPromptPreviewMacro(raw)) {
+      if (textareaRef.current) {
+        textareaRef.current.value = "";
+        textareaRef.current.style.height = "auto";
+      }
+      clearInputDraft(activeChatId);
+      syncInputState("");
+      setAttachments([]);
+      onPeekPrompt?.();
+      return;
+    }
+
     // If already generating for this chat, just save the message without
     // triggering another generation — the in-progress generation will see
     // it (server re-reads messages after any busy delay).
@@ -417,6 +436,7 @@ export function ConversationInput({ characterNames = [], groupResponseOrder, cha
     groupResponseOrder,
     qc,
     syncInputState,
+    onPeekPrompt,
   ]);
 
   const handleKeyDown = useCallback(

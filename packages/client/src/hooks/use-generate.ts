@@ -5,6 +5,7 @@ import { useCallback } from "react";
 import { useQueryClient, type InfiniteData, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api } from "../lib/api-client";
+import { agentKeys } from "./use-agents";
 import type { PendingCardUpdate } from "../stores/agent.store";
 import {
   EDITABLE_CHARACTER_CARD_FIELDS,
@@ -381,10 +382,8 @@ export function useGenerate() {
       forCharacterId?: string;
       generationGuide?: string;
     }) => {
-      // Prevent concurrent generations for the SAME chat — stops race conditions
-      // where autonomous messaging + user input both fire generate at once.
-      // Different chats CAN generate concurrently (e.g. idle/DnD delay in chat A
-      // while the user sends in chat B).
+      // Prevent concurrent generations for the same chat. Different chats may
+      // keep generating in the background while the user navigates elsewhere.
       // Uses the shared abortControllers map as the source of truth so ALL callers
       // of useGenerate() coordinate (the old per-instance useRef could diverge).
       if (useChatStore.getState().abortControllers.has(params.chatId)) {
@@ -593,7 +592,7 @@ export function useGenerate() {
       };
 
       try {
-        const { userStatus, debugMode } = useUIStore.getState();
+        const { userStatus, userActivity, debugMode } = useUIStore.getState();
 
         // Flush any pending game-state widget edits so the server sees them before committing
         const flushPatch = useGameStateStore.getState().flushPatch;
@@ -601,7 +600,7 @@ export function useGenerate() {
 
         for await (const event of api.streamEvents(
           "/generate",
-          { ...params, userStatus, debugMode, streaming: transportStreaming },
+          { ...params, userStatus, userActivity, debugMode, streaming: transportStreaming },
           abortController.signal,
         )) {
           switch (event.type) {
@@ -728,6 +727,10 @@ export function useGenerate() {
                   `[Agent] ✗ ${result.agentName} (${result.agentType}) — ${result.error ?? "unknown error"}`,
                   result.data,
                 );
+              }
+
+              if (result.success) {
+                qc.invalidateQueries({ queryKey: agentKeys.customRuns(params.chatId) });
               }
 
               // Only update agent/game/UI stores for the active chat so a
@@ -1507,6 +1510,10 @@ export function useGenerate() {
                   `[Retry Agent] ✗ ${result.agentName} (${result.agentType}) — ${result.error ?? "unknown error"}`,
                   result.data,
                 );
+              }
+
+              if (result.success) {
+                qc.invalidateQueries({ queryKey: agentKeys.customRuns(chatId) });
               }
 
               addResult(result.agentType, {

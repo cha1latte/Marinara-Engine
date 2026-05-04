@@ -231,6 +231,38 @@ export class OpenAIProvider extends BaseLLMProvider {
     return /^(o1|o3|o4)/.test(m) || m.startsWith("gpt-5");
   }
 
+  private isXAIEndpoint(): boolean {
+    const baseUrl = this.baseUrl.toLowerCase();
+    return baseUrl.includes("api.x.ai") || baseUrl.includes("x.ai/");
+  }
+
+  private isOpenRouterXAIModel(model: string): boolean {
+    return this.baseUrl.includes("openrouter.ai") && model.toLowerCase().startsWith("x-ai/grok-");
+  }
+
+  private isXAIMultiAgentModel(model: string): boolean {
+    return model.toLowerCase() === "grok-4.20-multi-agent";
+  }
+
+  private isXAIReasoningModel(model: string): boolean {
+    if (!this.isXAIEndpoint() && !this.isOpenRouterXAIModel(model)) return false;
+    const m = model.toLowerCase();
+    return (
+      m.startsWith("x-ai/grok-") ||
+      m.startsWith("grok-4.3") ||
+      m.startsWith("grok-4-1-fast") ||
+      this.isXAIMultiAgentModel(model)
+    );
+  }
+
+  private shouldSendStopSequences(model: string): boolean {
+    return !this.isXAIReasoningModel(model);
+  }
+
+  private shouldSendPenaltyParams(model: string): boolean {
+    return !this.isXAIReasoningModel(model);
+  }
+
   /**
    * Check if a model/config does NOT support temperature/topP.
    * o-series models never do.
@@ -259,6 +291,10 @@ export class OpenAIProvider extends BaseLLMProvider {
   }
 
   private applyChatCompletionsReasoning(body: Record<string, unknown>, options: ChatOptions): void {
+    if (this.isXAIReasoningModel(options.model)) {
+      return;
+    }
+
     if (this.isGLMModel(options.model)) {
       body.enable_thinking = this.hasActiveReasoningEffort(options.reasoningEffort);
       return;
@@ -270,6 +306,17 @@ export class OpenAIProvider extends BaseLLMProvider {
   }
 
   private applyResponsesReasoning(body: Record<string, unknown>, options: ChatOptions): void {
+    if (this.isXAIMultiAgentModel(options.model)) {
+      if (this.hasActiveReasoningEffort(options.reasoningEffort)) {
+        body.reasoning = { effort: options.reasoningEffort };
+      }
+      return;
+    }
+
+    if (this.isXAIReasoningModel(options.model)) {
+      return;
+    }
+
     if (this.isGLMModel(options.model)) {
       body.enable_thinking = this.hasActiveReasoningEffort(options.reasoningEffort);
       return;
@@ -291,10 +338,15 @@ export class OpenAIProvider extends BaseLLMProvider {
     }
   }
 
-  /** Check if a model requires the Responses API instead of Chat Completions */
-  private useResponsesAPI(model: string): boolean {
+  /** Check if a model requires or benefits from the Responses API instead of Chat Completions */
+  private useResponsesAPI(model: string, options?: Pick<ChatOptions, "captureReasoning">): boolean {
     const m = model.toLowerCase();
-    return RESPONSES_ONLY_PREFIXES.some((p) => m.startsWith(p)) || RESPONSES_ONLY_SUFFIXES.some((s) => m.endsWith(s));
+    return (
+      this.isXAIMultiAgentModel(model) ||
+      (!!options?.captureReasoning && this.isXAIReasoningModel(model)) ||
+      RESPONSES_ONLY_PREFIXES.some((p) => m.startsWith(p)) ||
+      RESPONSES_ONLY_SUFFIXES.some((s) => m.endsWith(s))
+    );
   }
 
   private requiresStreamingChatCompletions(model: string): boolean {
@@ -386,7 +438,7 @@ export class OpenAIProvider extends BaseLLMProvider {
     const maxTokens = this.applyMaxTokensCap(contextFit.maxTokens ?? configuredMaxTokens);
 
     // Route to Responses API for models that require it
-    if (this.useResponsesAPI(options.model)) {
+    if (this.useResponsesAPI(options.model, options)) {
       logger.debug(
         "[OpenAI] Routing chat() to Responses API for model=%s stream=%s",
         options.model,
@@ -411,7 +463,7 @@ export class OpenAIProvider extends BaseLLMProvider {
       model: options.model,
       messages: formatted,
       stream: effectiveStream,
-      ...(options.stop?.length ? { stop: options.stop } : {}),
+      ...(this.shouldSendStopSequences(options.model) && options.stop?.length ? { stop: options.stop } : {}),
       ...(options.tools?.length ? { tools: options.tools } : {}),
       ...(effectiveStream ? { stream_options: { include_usage: true } } : {}),
     };
@@ -436,8 +488,10 @@ export class OpenAIProvider extends BaseLLMProvider {
       ) {
         body.top_k = Math.round(options.topK);
       }
-      if (options.frequencyPenalty) body.frequency_penalty = options.frequencyPenalty;
-      if (options.presencePenalty) body.presence_penalty = options.presencePenalty;
+      if (this.shouldSendPenaltyParams(options.model)) {
+        if (options.frequencyPenalty) body.frequency_penalty = options.frequencyPenalty;
+        if (options.presencePenalty) body.presence_penalty = options.presencePenalty;
+      }
     }
 
     if (options.verbosity && options.model.toLowerCase().startsWith("gpt-5")) {
@@ -458,6 +512,8 @@ export class OpenAIProvider extends BaseLLMProvider {
     if (options.responseFormat) {
       body.response_format = options.responseFormat;
     }
+
+    this.applyCustomParameters(body, options);
 
     logger.debug(
       "[OpenAI chat()] stream=%s model=%s reasoning_effort=%s enableThinking=%s verbosity=%s max_completion_tokens=%s max_tokens=%s temperature=%s top_p=%s tools=%s",
@@ -591,7 +647,7 @@ export class OpenAIProvider extends BaseLLMProvider {
     const maxTokens = this.applyMaxTokensCap(contextFit.maxTokens ?? configuredMaxTokens);
 
     // Route to Responses API for models that require it
-    if (this.useResponsesAPI(options.model)) {
+    if (this.useResponsesAPI(options.model, options)) {
       logger.debug(
         "[OpenAI] Routing chatComplete() to Responses API for model=%s onToken=%s",
         options.model,
@@ -616,7 +672,7 @@ export class OpenAIProvider extends BaseLLMProvider {
       model: options.model,
       messages: formatted,
       stream: useStream,
-      ...(options.stop?.length ? { stop: options.stop } : {}),
+      ...(this.shouldSendStopSequences(options.model) && options.stop?.length ? { stop: options.stop } : {}),
       ...(options.tools?.length ? { tools: options.tools } : {}),
       ...(useStream ? { stream_options: { include_usage: true } } : {}),
     };
@@ -640,8 +696,10 @@ export class OpenAIProvider extends BaseLLMProvider {
       ) {
         body.top_k = Math.round(options.topK);
       }
-      if (options.frequencyPenalty) body.frequency_penalty = options.frequencyPenalty;
-      if (options.presencePenalty) body.presence_penalty = options.presencePenalty;
+      if (this.shouldSendPenaltyParams(options.model)) {
+        if (options.frequencyPenalty) body.frequency_penalty = options.frequencyPenalty;
+        if (options.presencePenalty) body.presence_penalty = options.presencePenalty;
+      }
     }
 
     if (options.verbosity && options.model.toLowerCase().startsWith("gpt-5")) {
@@ -662,6 +720,8 @@ export class OpenAIProvider extends BaseLLMProvider {
     if (options.responseFormat) {
       body.response_format = options.responseFormat;
     }
+
+    this.applyCustomParameters(body, options);
 
     logger.debug("[OpenAI chatComplete()] stream=%s model=%s onToken=%s", useStream, body.model, !!options.onToken);
 
@@ -932,6 +992,10 @@ export class OpenAIProvider extends BaseLLMProvider {
       input.push({ role: m.role, content: m.content });
     }
 
+    if (input.length === 0) {
+      input.push({ role: "user", content: "Continue." });
+    }
+
     return { instructions, input };
   }
 
@@ -991,7 +1055,7 @@ export class OpenAIProvider extends BaseLLMProvider {
       body.instructions = instructions;
     }
 
-    if (options.maxTokens) {
+    if (options.maxTokens && !this.isXAIMultiAgentModel(options.model)) {
       body.max_output_tokens = options.maxTokens;
     }
 
@@ -1000,8 +1064,10 @@ export class OpenAIProvider extends BaseLLMProvider {
       if (options.temperature != null) body.temperature = options.temperature;
       const topP = OpenAIProvider.normalizeTopP(options.topP);
       if (topP != null) body.top_p = topP;
-      if (options.frequencyPenalty) body.frequency_penalty = options.frequencyPenalty;
-      if (options.presencePenalty) body.presence_penalty = options.presencePenalty;
+      if (this.shouldSendPenaltyParams(options.model)) {
+        if (options.frequencyPenalty) body.frequency_penalty = options.frequencyPenalty;
+        if (options.presencePenalty) body.presence_penalty = options.presencePenalty;
+      }
     }
 
     this.applyResponsesReasoning(body, options);
@@ -1016,9 +1082,11 @@ export class OpenAIProvider extends BaseLLMProvider {
       body.provider = { order: [openrouterProvider] };
     }
 
-    if (options.tools?.length) {
+    if (options.tools?.length && !this.isXAIMultiAgentModel(options.model)) {
       body.tools = this.formatResponsesTools(options.tools);
     }
+
+    this.applyCustomParameters(body, options);
 
     return body;
   }

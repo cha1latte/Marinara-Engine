@@ -1,7 +1,35 @@
-import { PROVIDERS, type GameState } from "@marinara-engine/shared";
+import {
+  PROVIDERS,
+  generationParametersSchema,
+  type GameState,
+  type GenerationParameters,
+} from "@marinara-engine/shared";
 import { wrapContent } from "../../services/prompt/format-engine.js";
 
 export type SimpleMessage = { role: "system" | "user" | "assistant"; content: string };
+export type StoredGenerationParameters = Partial<GenerationParameters>;
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+export function mergeCustomParameters(
+  base: Record<string, unknown> | null | undefined,
+  next: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...(base ?? {}) };
+  if (!next) return merged;
+  for (const [key, value] of Object.entries(next)) {
+    if (value === undefined) continue;
+    const current = merged[key];
+    if (isPlainRecord(current) && isPlainRecord(value)) {
+      merged[key] = mergeCustomParameters(current, value);
+    } else {
+      merged[key] = value;
+    }
+  }
+  return merged;
+}
 
 /** Find last message index matching a role (or predicate). Returns -1 if not found. */
 export function findLastIndex(messages: SimpleMessage[], role: string): number {
@@ -21,6 +49,10 @@ export function parseExtra(extra: unknown): Record<string, unknown> {
   }
 }
 
+export function isMessageHiddenFromAI(message: { extra?: unknown }): boolean {
+  return parseExtra(message.extra).hiddenFromAI === true;
+}
+
 /** Resolve the base URL for a connection, falling back to the provider default. */
 export function resolveBaseUrl(connection: { baseUrl: string | null; provider: string }): string {
   if (connection.baseUrl) return connection.baseUrl.replace(/\/+$/, "");
@@ -30,6 +62,69 @@ export function resolveBaseUrl(connection: { baseUrl: string | null; provider: s
   if (connection.provider === "claude_subscription") return "claude-agent-sdk://local";
   const providerDef = PROVIDERS[connection.provider as keyof typeof PROVIDERS];
   return providerDef?.defaultBaseUrl ?? "";
+}
+
+/** Parse connection/chat stored generation parameters without injecting schema defaults. */
+export function parseStoredGenerationParameters(raw: unknown): StoredGenerationParameters | null {
+  let parsed = raw;
+  if (typeof parsed === "string") {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      return null;
+    }
+  }
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+
+  const result = generationParametersSchema.partial().safeParse(parsed);
+  if (result.success) return result.data;
+
+  // Older installs or extension callers may leave one malformed field in an
+  // otherwise useful parameter blob. Salvage valid scalar fields instead of
+  // dropping the whole advanced-parameter fallback.
+  const source = parsed as Record<string, unknown>;
+  const out: StoredGenerationParameters = {};
+  for (const key of [
+    "temperature",
+    "topP",
+    "topK",
+    "minP",
+    "maxTokens",
+    "maxContext",
+    "frequencyPenalty",
+    "presencePenalty",
+  ] as const) {
+    const value = source[key];
+    if (typeof value === "number" && Number.isFinite(value)) out[key] = value;
+  }
+  if (
+    source.reasoningEffort === null ||
+    ["low", "medium", "high", "maximum"].includes(String(source.reasoningEffort))
+  ) {
+    out.reasoningEffort = source.reasoningEffort as StoredGenerationParameters["reasoningEffort"];
+  }
+  if (source.verbosity === null || ["low", "medium", "high"].includes(String(source.verbosity))) {
+    out.verbosity = source.verbosity as StoredGenerationParameters["verbosity"];
+  }
+  if (typeof source.assistantPrefill === "string") out.assistantPrefill = source.assistantPrefill;
+  if (isPlainRecord(source.customParameters)) {
+    out.customParameters = source.customParameters;
+  }
+  for (const key of [
+    "squashSystemMessages",
+    "showThoughts",
+    "useMaxContext",
+    "strictRoleFormatting",
+    "singleUserMessage",
+  ] as const) {
+    const value = source[key];
+    if (typeof value === "boolean") out[key] = value;
+  }
+  if (Array.isArray(source.stopSequences) && source.stopSequences.every((item) => typeof item === "string")) {
+    out.stopSequences = source.stopSequences;
+  }
+  return Object.keys(out).length > 0 ? out : null;
 }
 
 /**

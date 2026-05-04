@@ -544,7 +544,7 @@ export function GameInput({
             (text.trim() || attachments.length > 0 || (pendingMoveLabel && addressMode === "scene") || queuedDice) &&
               !disabled &&
               !rollingQueuedDice
-              ? "text-[var(--primary)] hover:text-[var(--primary)]/80"
+              ? "text-[var(--foreground)]/50 hover:text-[var(--foreground)]/70"
               : "text-[var(--muted-foreground)]/40",
           )}
         >

@@ -137,6 +137,7 @@ export async function importSTCharacter(
         data.extensions[IMPORT_METADATA_KEY] = updatedImportMetadata;
         await storage.update(charId, { extensions: { ...data.extensions } }, undefined, {
           updatedAt: normalizedTimestamps?.updatedAt ?? normalizedTimestamps?.createdAt ?? null,
+          skipVersionSnapshot: true,
         });
       }
     } catch {

@@ -4,6 +4,7 @@
 import {
   APP_LANGUAGE_OPTIONS,
   useUIStore,
+  type GameDialogueDisplayMode,
   type InstalledExtension,
   type RoleplayAvatarStyle,
   type VisualTheme,
@@ -49,6 +50,7 @@ import {
   FolderOpen,
   RefreshCw,
   ExternalLink,
+  ScrollText,
 } from "lucide-react";
 import { useClearAllData, useExpungeData, useUpdateChatMetadata, type ExpungeScope } from "../../hooks/use-chats";
 import { useChatStore } from "../../stores/chat.store";
@@ -121,11 +123,24 @@ const ROLEPLAY_AVATAR_STYLE_OPTIONS: Array<{ id: RoleplayAvatarStyle; label: str
   },
 ];
 
+const GAME_DIALOGUE_DISPLAY_OPTIONS: Array<{ id: GameDialogueDisplayMode; label: string; desc: string }> = [
+  {
+    id: "classic",
+    label: "Classic VN",
+    desc: "One active segment in the VN box, with logs available from the Logs button.",
+  },
+  {
+    id: "stacked",
+    label: "History Above VN",
+    desc: "Shows prior segments above the VN box and keeps the full session scrollable there.",
+  },
+];
+
 const GAME_ASSET_CATEGORIES = [
   {
     id: "music",
     label: "Music",
-    defaultFolder: "exploration",
+    defaultFolder: "exploration/fantasy/calm",
     accept: "audio/*,.mp3,.ogg,.wav,.flac,.m4a,.aac,.webm",
   },
   {
@@ -159,6 +174,49 @@ const GAME_ASSET_CATEGORY_BY_ID = new Map(GAME_ASSET_CATEGORIES.map((category) =
 
 // Module-level set survives component remounts (e.g. mobile AnimatePresence unmount/remount)
 const mountedSettingsTabs = new Set<string>();
+
+function ImageDimensionRow({
+  label,
+  help,
+  width,
+  height,
+  onCommit,
+}: {
+  label: string;
+  help: string;
+  width: number;
+  height: number;
+  onCommit: (width: number, height: number) => void;
+}) {
+  return (
+    <div className="grid gap-2 rounded-lg bg-[var(--background)]/55 p-3 ring-1 ring-[var(--border)] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+      <div className="min-w-0">
+        <div className="inline-flex items-center gap-1 text-xs font-medium text-[var(--foreground)]">
+          {label}
+          <HelpTooltip text={help} />
+        </div>
+        <div className="mt-1 text-[0.625rem] text-[var(--muted-foreground)]">Pixels, clamped from 64 to 4096.</div>
+      </div>
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1.5 sm:w-40">
+        <DraftNumberInput
+          value={width}
+          min={64}
+          max={4096}
+          onCommit={(nextWidth) => onCommit(nextWidth, height)}
+          className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--secondary)] px-2 py-1 text-xs"
+        />
+        <span className="text-[0.625rem] text-[var(--muted-foreground)]">x</span>
+        <DraftNumberInput
+          value={height}
+          min={64}
+          max={4096}
+          onCommit={(nextHeight) => onCommit(width, nextHeight)}
+          className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--secondary)] px-2 py-1 text-xs"
+        />
+      </div>
+    </div>
+  );
+}
 
 export function SettingsPanel() {
   const settingsTab = useUIStore((s) => s.settingsTab);
@@ -222,6 +280,17 @@ function GeneralSettings() {
   const setGameTextSpeed = useUIStore((s) => s.setGameTextSpeed);
   const gameAutoPlayDelay = useUIStore((s) => s.gameAutoPlayDelay);
   const setGameAutoPlayDelay = useUIStore((s) => s.setGameAutoPlayDelay);
+  const reviewImagePromptsBeforeSend = useUIStore((s) => s.reviewImagePromptsBeforeSend);
+  const setReviewImagePromptsBeforeSend = useUIStore((s) => s.setReviewImagePromptsBeforeSend);
+  const imageBackgroundWidth = useUIStore((s) => s.imageBackgroundWidth);
+  const imageBackgroundHeight = useUIStore((s) => s.imageBackgroundHeight);
+  const setImageBackgroundDimensions = useUIStore((s) => s.setImageBackgroundDimensions);
+  const imagePortraitWidth = useUIStore((s) => s.imagePortraitWidth);
+  const imagePortraitHeight = useUIStore((s) => s.imagePortraitHeight);
+  const setImagePortraitDimensions = useUIStore((s) => s.setImagePortraitDimensions);
+  const imageSelfieWidth = useUIStore((s) => s.imageSelfieWidth);
+  const imageSelfieHeight = useUIStore((s) => s.imageSelfieHeight);
+  const setImageSelfieDimensions = useUIStore((s) => s.setImageSelfieDimensions);
   const enterToSendRP = useUIStore((s) => s.enterToSendRP);
   const setEnterToSendRP = useUIStore((s) => s.setEnterToSendRP);
   const enterToSendConvo = useUIStore((s) => s.enterToSendConvo);
@@ -495,6 +564,46 @@ function GeneralSettings() {
         }
       />
 
+      <div className="rounded-xl bg-[var(--secondary)]/50 p-4 ring-1 ring-[var(--border)]">
+        <div className="mb-3 flex flex-col gap-1">
+          <div className="text-xs font-semibold text-[var(--foreground)]">Image Generation</div>
+          <p className="text-[0.625rem] leading-relaxed text-[var(--muted-foreground)]">
+            Review generated prompts before Game mode sends them, and set default canvases for generated assets.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-2.5">
+          <ToggleSetting
+            label="Expose image prompts before sending"
+            checked={reviewImagePromptsBeforeSend}
+            onChange={setReviewImagePromptsBeforeSend}
+            help="When Game mode needs generated backgrounds, illustrations, or NPC portraits, it shows one grouped prompt review window before sending requests to the image provider."
+          />
+
+          <ImageDimensionRow
+            label="Backgrounds"
+            help="Used for Game mode generated backgrounds and special scene illustrations."
+            width={imageBackgroundWidth}
+            height={imageBackgroundHeight}
+            onCommit={setImageBackgroundDimensions}
+          />
+          <ImageDimensionRow
+            label="Portraits"
+            help="Used for generated character and NPC portraits."
+            width={imagePortraitWidth}
+            height={imagePortraitHeight}
+            onCommit={setImagePortraitDimensions}
+          />
+          <ImageDimensionRow
+            label="Selfies"
+            help="Default selfie canvas for Roleplay and Conversation image commands when a chat does not override selfie resolution."
+            width={imageSelfieWidth}
+            height={imageSelfieHeight}
+            onCommit={setImageSelfieDimensions}
+          />
+        </div>
+      </div>
+
       {/* Game Assets Folders */}
       <div className="rounded-xl bg-[var(--secondary)]/50 p-4 ring-1 ring-[var(--border)]">
         <div className="mb-2 flex items-center justify-between gap-2">
@@ -589,7 +698,8 @@ function GeneralSettings() {
         <p className="mt-2.5 text-[0.625rem] leading-relaxed text-[var(--muted-foreground)]">
           On desktop, folder buttons open the server's asset folders. On mobile or a dedicated server, use upload here
           so files from your phone are copied onto the server. Audio supports MP3, OGG, WAV, FLAC, M4A, AAC, and WebM;
-          images support PNG, JPG, GIF, WebP, AVIF, and SVG for sprites.
+          images support PNG, JPG, GIF, WebP, AVIF, and SVG for sprites. Music folders use state/genre/intensity, such
+          as exploration/fantasy/calm.
         </p>
       </div>
     </div>
@@ -648,6 +758,8 @@ function AppearanceSettings() {
   const setChatFontOpacity = useUIStore((s) => s.setChatFontOpacity);
   const roleplayAvatarStyle = useUIStore((s) => s.roleplayAvatarStyle);
   const setRoleplayAvatarStyle = useUIStore((s) => s.setRoleplayAvatarStyle);
+  const gameDialogueDisplayMode = useUIStore((s) => s.gameDialogueDisplayMode);
+  const setGameDialogueDisplayMode = useUIStore((s) => s.setGameDialogueDisplayMode);
   const gameAvatarScale = useUIStore((s) => s.gameAvatarScale);
   const setGameAvatarScale = useUIStore((s) => s.setGameAvatarScale);
   const textStrokeWidth = useUIStore((s) => s.textStrokeWidth);
@@ -1061,6 +1173,32 @@ function AppearanceSettings() {
         </div>
       </div>
 
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-1.5">
+          <ScrollText size="0.75rem" className="text-[var(--muted-foreground)]" />
+          <span className="text-xs font-medium">Game Dialogue Display</span>
+          <HelpTooltip text="Choose whether Game mode uses the classic VN box or shows a scrollable segment history directly above it." />
+        </div>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {GAME_DIALOGUE_DISPLAY_OPTIONS.map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => setGameDialogueDisplayMode(opt.id)}
+              className={cn(
+                "flex flex-col items-start gap-1 rounded-lg border p-3 text-left text-xs transition-all",
+                gameDialogueDisplayMode === opt.id
+                  ? "border-[var(--primary)] bg-[var(--primary)]/10 ring-1 ring-[var(--primary)]"
+                  : "border-[var(--border)] hover:border-[var(--primary)]/40",
+              )}
+            >
+              <span className="font-semibold">{opt.label}</span>
+              <span className="text-[0.625rem] leading-tight text-[var(--muted-foreground)]">{opt.desc}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* ── Effects ── */}
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-1.5">
@@ -1175,9 +1313,7 @@ function AppearanceSettings() {
           type="button"
           onClick={() => {
             const defaults =
-              activeGradientScheme === "dark"
-                ? { from: "#0a0a0e", to: "#1c2133" }
-                : { from: "#f2eff7", to: "#eae6f0" };
+              activeGradientScheme === "dark" ? { from: "#0a0a0e", to: "#1c2133" } : { from: "#f2eff7", to: "#eae6f0" };
             setConvoGradientField(activeGradientScheme, "from", defaults.from);
             setConvoGradientField(activeGradientScheme, "to", defaults.to);
             setDraftFrom(defaults.from);
@@ -2615,7 +2751,7 @@ function AdvancedSettings() {
         <div className="flex items-center gap-1.5">
           <Download size="0.75rem" className="text-[var(--muted-foreground)]" />
           <span className="text-xs font-medium">Backup & Export</span>
-          <HelpTooltip text="Download a full backup as a .zip archive (database + avatars, sprites, backgrounds, gallery, fonts, knowledge sources). Restoring the zip currently requires extracting it into the server's data folder manually; for a one-click migration of characters, personas, lorebooks, presets, agents, and themes, use Export Profile (JSON) instead." />
+          <HelpTooltip text="Download a full backup as a .zip archive (storage snapshots + avatars, sprites, backgrounds, gallery, fonts, knowledge sources). The zip also includes marinara-profile.json for one-click restore through Import Profile (JSON). The raw folders are for manual recovery." />
         </div>
         <button
           onClick={handleCreateBackup}

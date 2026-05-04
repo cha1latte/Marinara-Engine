@@ -397,18 +397,18 @@ Schema:
 }
 1. Stats range from 0 to 100 (percentage-based). Never set any stat below 0 or above 100.
 2. Changes must be proportional to what actually happened. Don't swing wildly over minor events.
-  2a. Small routine actions = small changes (1–5%):
+  2a. Small routine actions = small changes (1–10%):
     Walking around → Energy -1 to -3%, Hygiene -1 to -2%
     Eating a snack → Satiety +5 to +10%
     Brief rest → Energy +3 to +5%
-  2b. Moderate events = moderate changes (5–15%):
+  2b. Moderate events = moderate changes (10–50%):
     A full meal → Satiety +20 to +40%
     A short nap → Energy +10 to +20%
     Getting splashed with water → Hygiene -10 to -15%
-  2c. Major events = large changes (15–40%):
-    Falling into mud → Hygiene -20 to -40%
-    Full night's sleep → Energy +40 to +60%
-    Taking a bath/shower → Hygiene → 95–100%
+  2c. Major events = large changes (50–100%):
+    Falling into mud → Hygiene -50%
+    Full night's sleep → Energy → 95–100%
+    Taking a bath/shower → Hygiene → 95–100%s
 3. Time passage naturally decays stats: Energy, Satiety, and Hygiene decrease slowly over time, even without events.
 4. Preserve previous values and only adjust what the narrative warrants. If nothing relevant happened, return the previous values unchanged.
 5. Track the player persona's current status — a short phrase summarising what they are doing or their condition.

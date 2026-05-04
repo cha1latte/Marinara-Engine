@@ -19,7 +19,7 @@ import {
   type SlashCommand,
   type SlashCommandContext,
 } from "../../lib/slash-commands";
-import { resolveInputMacrosForChat } from "../../lib/chat-macros";
+import { isPromptPreviewMacro, resolveInputMacrosForChat } from "../../lib/chat-macros";
 import { cn, getAvatarCropStyle } from "../../lib/utils";
 import { EmojiPicker } from "../ui/EmojiPicker";
 import { QuickConnectionSwitcher } from "./QuickConnectionSwitcher";
@@ -47,6 +47,7 @@ interface ChatInputProps {
     avatarUrl: string | null;
     avatarCrop?: { zoom: number; offsetX: number; offsetY: number } | null;
   }>;
+  onPeekPrompt?: () => void;
 }
 
 export const ChatInput = memo(function ChatInput({
@@ -54,6 +55,7 @@ export const ChatInput = memo(function ChatInput({
   characterNames = [],
   groupResponseOrder,
   chatCharacters,
+  onPeekPrompt,
 }: ChatInputProps) {
   const [hasInput, setHasInput] = useState(false);
   const [completions, setCompletions] = useState<SlashCommand[]>([]);
@@ -312,6 +314,19 @@ export const ChatInput = memo(function ChatInput({
 
     const normalized = normalizeQuotes(raw.trim());
 
+    if (isPromptPreviewMacro(normalized)) {
+      if (textareaRef.current) {
+        textareaRef.current.value = "";
+        textareaRef.current.style.height = "auto";
+      }
+      syncInputState("");
+      setCompletions([]);
+      setAttachments([]);
+      clearInputDraft(activeChatId);
+      onPeekPrompt?.();
+      return;
+    }
+
     // Check for slash command
     const match = matchSlashCommand(normalized);
     if (match) {
@@ -415,6 +430,7 @@ export const ChatInput = memo(function ChatInput({
     groupResponseOrder,
     createMessage,
     syncInputState,
+    onPeekPrompt,
   ]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

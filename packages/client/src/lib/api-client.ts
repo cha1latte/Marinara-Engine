@@ -8,10 +8,56 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    public payload?: unknown,
   ) {
     super(message);
     this.name = "ApiError";
   }
+}
+
+export type JsonRepairKind = "game_setup" | "session_conclusion" | "campaign_progression";
+
+export type JsonRepairRequest = {
+  kind: JsonRepairKind;
+  title: string;
+  rawJson: string;
+  applyEndpoint: string;
+  applyBody?: Record<string, unknown>;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+export function getJsonRepairRequest(error: unknown): JsonRepairRequest | null {
+  if (!(error instanceof ApiError) || !isRecord(error.payload)) return null;
+  const repair = error.payload.jsonRepair;
+  if (!isRecord(repair)) return null;
+
+  const kind = repair.kind;
+  const title = repair.title;
+  const rawJson = repair.rawJson;
+  const applyEndpoint = repair.applyEndpoint;
+  if (
+    (kind !== "game_setup" && kind !== "session_conclusion" && kind !== "campaign_progression") ||
+    typeof title !== "string" ||
+    typeof rawJson !== "string" ||
+    typeof applyEndpoint !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    kind,
+    title,
+    rawJson,
+    applyEndpoint,
+    applyBody: isRecord(repair.applyBody) ? repair.applyBody : undefined,
+  };
+}
+
+export function isJsonRepairApiError(error: unknown): boolean {
+  return getJsonRepairRequest(error) !== null;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -28,7 +74,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText }));
-    throw new ApiError(res.status, body.error ?? res.statusText);
+    throw new ApiError(res.status, body.error ?? res.statusText, body);
   }
 
   // 204 No Content
@@ -90,7 +136,7 @@ export const api = {
     });
     if (!res.ok) {
       const payload = await res.json().catch(() => ({ error: res.statusText }));
-      throw new ApiError(res.status, payload.error ?? "Download failed");
+      throw new ApiError(res.status, payload.error ?? "Download failed", payload);
     }
     const disposition = res.headers.get("Content-Disposition");
     let filename = fallbackFilename;
@@ -151,7 +197,7 @@ export const api = {
           try {
             const parsed = JSON.parse(data);
             if (parsed.type === "token" && parsed.data) yield parsed.data;
-            else if (parsed.type === "error") throw new ApiError(500, parsed.data ?? "Generation error");
+            else if (parsed.type === "error") throw new ApiError(500, parsed.data ?? "Generation error", parsed);
             else if (parsed.type === "done") return;
           } catch (e) {
             // If not JSON, yield as raw text
@@ -229,7 +275,7 @@ export const api = {
 
     if (!res.ok) {
       const body = await res.json().catch(() => ({ error: res.statusText }));
-      throw new ApiError(res.status, body.error ?? res.statusText);
+      throw new ApiError(res.status, body.error ?? res.statusText, body);
     }
 
     return res.json() as Promise<T>;

@@ -41,9 +41,7 @@ async function sha256Base64url(plain: string): Promise<string> {
   return hash.toString("base64url");
 }
 
-type ExchangeResult =
-  | { ok: true }
-  | { ok: false; status: number; reason: string };
+type ExchangeResult = { ok: true } | { ok: false; status: number; reason: string };
 
 export async function spotifyAuthRoutes(app: FastifyInstance) {
   const storage = createAgentsStorage(app.db);

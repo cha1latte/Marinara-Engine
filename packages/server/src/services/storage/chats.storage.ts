@@ -1,7 +1,7 @@
 // ──────────────────────────────────────────────
 // Storage: Chats
 // ──────────────────────────────────────────────
-import { eq, desc, and, lt, gt, sql, count, inArray, getTableColumns } from "drizzle-orm";
+import { eq, desc, and, lt, gt, inArray } from "drizzle-orm";
 import type { DB } from "../../db/connection.js";
 import {
   chats,
@@ -233,56 +233,58 @@ export function createChatsStorage(db: DB) {
     // ── Messages ──
 
     async countMessages(chatId: string): Promise<number> {
-      const [row] = await db.select({ count: count() }).from(messages).where(eq(messages.chatId, chatId));
-      return row?.count ?? 0;
+      const rows = await db.select({ id: messages.id }).from(messages).where(eq(messages.chatId, chatId));
+      return rows.length;
     },
 
     async listMessages(chatId: string) {
       const rows = await db
-        .select({ ...getTableColumns(messages), rowid: sql<number>`messages.rowid`.as("rowid") })
+        .select()
         .from(messages)
         .where(eq(messages.chatId, chatId))
-        .orderBy(messages.createdAt, sql`messages.rowid`);
-      const swipeCounts = await db
-        .select({ messageId: messageSwipes.messageId, count: count() })
-        .from(messageSwipes)
-        .where(sql`${messageSwipes.messageId} IN (SELECT id FROM messages WHERE chat_id = ${chatId})`)
-        .groupBy(messageSwipes.messageId);
-      const countMap = new Map(swipeCounts.map((r) => [r.messageId, r.count]));
-      return rows.map((m) => ({ ...m, swipeCount: countMap.get(m.id) ?? 0 }));
+        .orderBy(messages.createdAt, messages.id);
+      const decorated = rows.map((m, index) => ({ ...m, rowid: index + 1 }));
+      const ids = decorated.map((m) => m.id);
+      const swipes = ids.length
+        ? await db
+            .select({ messageId: messageSwipes.messageId })
+            .from(messageSwipes)
+            .where(inArray(messageSwipes.messageId, ids))
+        : [];
+      const countMap = new Map<string, number>();
+      for (const swipe of swipes) {
+        countMap.set(swipe.messageId, (countMap.get(swipe.messageId) ?? 0) + 1);
+      }
+      return decorated.map((m) => ({ ...m, swipeCount: countMap.get(m.id) ?? 0 }));
     },
 
     /** Paginated: returns the latest `limit` messages (optionally before a cursor). */
     async listMessagesPaginated(chatId: string, limit: number, before?: string) {
-      const conditions = [eq(messages.chatId, chatId)];
       const cursor = parseMessageCursor(before);
+      const allRows = await db
+        .select()
+        .from(messages)
+        .where(eq(messages.chatId, chatId))
+        .orderBy(messages.createdAt, messages.id);
+      let candidates = allRows.map((m, index) => ({ ...m, rowid: index + 1 }));
       if (cursor) {
-        conditions.push(
-          sql`(${messages.createdAt} < ${cursor.createdAt} OR (${messages.createdAt} = ${cursor.createdAt} AND messages.rowid < ${cursor.rowid}))`,
+        candidates = candidates.filter(
+          (m) => m.createdAt < cursor.createdAt || (m.createdAt === cursor.createdAt && m.rowid < cursor.rowid),
         );
       } else if (before) {
-        conditions.push(lt(messages.createdAt, before));
+        candidates = candidates.filter((m) => m.createdAt < before);
       }
-      const rows = await db
-        .select({ ...getTableColumns(messages), rowid: sql<number>`messages.rowid`.as("rowid") })
-        .from(messages)
-        .where(and(...conditions))
-        .orderBy(desc(messages.createdAt), sql`messages.rowid desc`)
-        .limit(limit);
-      const reversed = rows.reverse();
+      const reversed = candidates.slice(-limit);
       const ids = reversed.map((m) => m.id);
       if (ids.length === 0) return reversed;
-      const swipeCounts = await db
-        .select({ messageId: messageSwipes.messageId, count: count() })
+      const swipes = await db
+        .select({ messageId: messageSwipes.messageId })
         .from(messageSwipes)
-        .where(
-          sql`${messageSwipes.messageId} IN (${sql.join(
-            ids.map((id) => sql`${id}`),
-            sql`, `,
-          )})`,
-        )
-        .groupBy(messageSwipes.messageId);
-      const countMap = new Map(swipeCounts.map((r) => [r.messageId, r.count]));
+        .where(inArray(messageSwipes.messageId, ids));
+      const countMap = new Map<string, number>();
+      for (const swipe of swipes) {
+        countMap.set(swipe.messageId, (countMap.get(swipe.messageId) ?? 0) + 1);
+      }
       return reversed.map((m) => ({ ...m, swipeCount: countMap.get(m.id) ?? 0 }));
     },
 
@@ -578,10 +580,16 @@ export function createChatsStorage(db: DB) {
       }
 
       await db.delete(messageSwipes).where(eq(messageSwipes.id, target.id));
-      await db
-        .update(messageSwipes)
-        .set({ index: sql`${messageSwipes.index} - 1` })
+      const swipesToShift = await db
+        .select()
+        .from(messageSwipes)
         .where(and(eq(messageSwipes.messageId, messageId), gt(messageSwipes.index, index)));
+      for (const swipe of swipesToShift) {
+        await db
+          .update(messageSwipes)
+          .set({ index: swipe.index - 1 })
+          .where(eq(messageSwipes.id, swipe.id));
+      }
 
       await db
         .update(messages)

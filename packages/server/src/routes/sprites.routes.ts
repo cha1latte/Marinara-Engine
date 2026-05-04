@@ -54,6 +54,7 @@ async function getSpriteCapabilities() {
   }
 }
 import { generateImage } from "../services/image/image-generation.js";
+import { resolveConnectionImageDefaults } from "../services/image/image-generation-defaults.js";
 import { createConnectionsStorage } from "../services/storage/connections.storage.js";
 import { createPromptOverridesStorage } from "../services/storage/prompt-overrides.storage.js";
 import {
@@ -601,6 +602,7 @@ export async function spritesRoutes(app: FastifyInstance) {
     const imgApiKey = conn.apiKey || "";
     const imgSource = (conn as any).imageGenerationSource || imgModel;
     const imgServiceHint = conn.imageService || imgSource;
+    const imageDefaults = resolveConnectionImageDefaults(conn);
 
     // Build the prompt for an expression sheet or full-body pose sheet.
     const expressionList = expressions.join(", ");
@@ -668,6 +670,7 @@ export async function spritesRoutes(app: FastifyInstance) {
               referenceImage: resolvedRefs[0],
               referenceImages: resolvedRefs.length > 1 ? resolvedRefs : undefined,
               comfyWorkflow: conn.comfyuiWorkflow || undefined,
+              imageDefaults,
             });
 
             let spriteBuffer: Buffer = Buffer.from(imageResult.base64, "base64");
@@ -731,6 +734,7 @@ export async function spritesRoutes(app: FastifyInstance) {
         referenceImage: resolvedRefs[0],
         referenceImages: resolvedRefs.length > 1 ? resolvedRefs : undefined,
         comfyWorkflow: conn.comfyuiWorkflow || undefined,
+        imageDefaults,
       });
 
       // Decode the generated image
