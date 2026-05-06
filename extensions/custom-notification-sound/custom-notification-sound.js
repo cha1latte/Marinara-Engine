@@ -49,6 +49,18 @@
     return isFinite(v) && v >= 0 && v <= 1 ? v : DEFAULT_VOLUME;
   }
 
+  function dataUrlToObjectUrl(dataUrl) {
+    var match = /^data:([^;,]+)?(;base64)?,(.*)$/i.exec(dataUrl);
+    if (!match) return dataUrl;
+    var mime = match[1] || "application/octet-stream";
+    var isBase64 = !!match[2];
+    var payload = match[3] || "";
+    var binary = isBase64 ? atob(payload) : decodeURIComponent(payload);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return URL.createObjectURL(new Blob([bytes], { type: mime }));
+  }
+
   function playCustomSound() {
     var url = readSound();
     if (!url) return;
@@ -56,8 +68,14 @@
     if (now - lastPlayed < DEDUPE_MS) return;
     lastPlayed = now;
     try {
-      var a = new Audio(url);
+      var objectUrl = dataUrlToObjectUrl(url);
+      var a = new Audio(objectUrl);
       a.volume = readVolume();
+      if (objectUrl !== url) {
+        var revoke = function () { URL.revokeObjectURL(objectUrl); };
+        a.addEventListener("ended", revoke, { once: true });
+        a.addEventListener("error", revoke, { once: true });
+      }
       var p = a.play();
       if (p && typeof p.catch === "function") p.catch(function () { /* autoplay blocked */ });
     } catch (e) { /* ignore */ }
@@ -219,18 +237,24 @@
 
   function tryInjectToggle() {
     if (document.getElementById(TOGGLE_ID)) return;
-    var candidates = document.querySelectorAll("span.font-medium.truncate");
+    var candidates = document.querySelectorAll("span, [data-extension-name]");
     for (var i = 0; i < candidates.length; i++) {
       var span = candidates[i];
       if (!span.textContent || span.textContent.trim() !== EXTENSION_NAME) continue;
-      var card = span.closest('[class*="rounded-lg"]');
+      var card = span.closest('[data-extension-id], [data-extension-card], [class*="rounded"]');
       if (!card) continue;
-      var trash = card.querySelector('button[title="Remove extension"]');
+      var trash =
+        card.querySelector('button[title="Remove extension"]') ||
+        card.querySelector('button[aria-label="Remove extension"]') ||
+        card.querySelector('button[data-extension-action="remove"]') ||
+        card.querySelector('button:last-of-type');
       if (!trash) continue;
       var toggle = document.createElement("button");
       toggle.id = TOGGLE_ID;
       toggle.className = "cns-toggle";
       toggle.title = "Notification sound settings";
+      toggle.setAttribute("aria-label", "Notification sound settings");
+      toggle.type = "button";
       toggle.innerHTML = BELL_ICON_SVG;
       toggle.addEventListener("click", function (e) {
         e.stopPropagation();
