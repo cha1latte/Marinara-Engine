@@ -28,6 +28,7 @@ import { chatKeys } from "../../hooks/use-chats";
 import { resolveMessageMacros } from "../../lib/chat-macros";
 import { useTranslate } from "../../hooks/use-translate";
 import { api } from "../../lib/api-client";
+import { parseSpeakerTags } from "../../lib/speaker-tags";
 import type { CharacterMap, MessageSelectionToggle, PersonaInfo } from "./chat-area.types";
 import { GenerationReplayDetailsModal, hasGenerationReplayDetails } from "./GenerationReplayDetailsModal";
 import { ImagePromptPanel } from "./ImagePromptPanel";
@@ -185,35 +186,29 @@ function MessageContent({
   return <>{renderMarkdownBlocks(compacted, renderInline)}</>;
 }
 
-/** Parse <speaker="Name">text</speaker> tags into segments */
 interface SpeakerSegment {
   speaker: string | null; // null = narration / non-attributed text
   text: string;
 }
-function parseSpeakerTags(content: string, knownNames: Set<string>): SpeakerSegment[] | null {
-  const regex = /<speaker="([^"]*)">([\s\S]*?)<\/speaker>/g;
-  let match: RegExpExecArray | null;
+function parseConversationSpeakerTags(content: string, knownNames: Set<string>): SpeakerSegment[] | null {
+  const parsed = parseSpeakerTags(content);
+  if (!parsed) return null;
+
   const segments: SpeakerSegment[] = [];
-  let lastIndex = 0;
-  let foundTag = false;
-  while ((match = regex.exec(content)) !== null) {
-    foundTag = true;
-    const speakerName = match[1]!.trim();
-    const knownSpeaker = knownNames.has(speakerName.toLowerCase());
-    // Text before this tag
-    if (match.index > lastIndex) {
-      const before = content.slice(lastIndex, match.index).trim();
-      if (before) segments.push({ speaker: null, text: before });
+  for (const segment of parsed) {
+    const text = segment.text.trim();
+    if (!text && segment.kind === "narration") continue;
+    if (segment.kind === "narration") {
+      segments.push({ speaker: null, text });
+      continue;
     }
-    segments.push({ speaker: knownSpeaker ? speakerName : null, text: match[2]!.trim() });
-    lastIndex = regex.lastIndex;
+
+    const speakerName = segment.name.trim();
+    const knownSpeaker = knownNames.has(speakerName.toLowerCase());
+    segments.push({ speaker: knownSpeaker ? speakerName : null, text });
   }
-  // Trailing text
-  if (lastIndex < content.length) {
-    const after = content.slice(lastIndex).trim();
-    if (after) segments.push({ speaker: null, text: after });
-  }
-  return foundTag ? segments : null;
+
+  return segments;
 }
 
 /** Parse "Name: text" format into segments. Requires known character names to avoid false positives. */
@@ -571,7 +566,7 @@ export const ConversationMessage = memo(function ConversationMessage({
     if (isUser || !renderedContent) return null;
     const knownNames = charByName ? new Set(charByName.keys()) : new Set<string>();
     // Try <speaker> tags first (backward compat)
-    const speakerSegs = parseSpeakerTags(renderedContent, knownNames);
+    const speakerSegs = parseConversationSpeakerTags(renderedContent, knownNames);
     if (speakerSegs) return groupConsecutiveSegments(speakerSegs);
     // Try Name: text format
     const nameSegs = parseNamePrefixFormat(renderedContent, knownNames);

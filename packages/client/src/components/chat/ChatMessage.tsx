@@ -50,6 +50,7 @@ import { ttsService } from "../../lib/tts-service";
 import { useTTSConfig } from "../../hooks/use-tts";
 import { buildTTSVoiceRequests, normalizeTTSCharacterName, withTTSVoiceRequestCacheKeys } from "../../lib/tts-dialogue";
 import { DIALOGUE_QUOTE_PATTERN_SOURCE, HTML_SAFE_DIALOGUE_QUOTE_PATTERN_SOURCE } from "../../lib/dialogue-quotes";
+import { parseSpeakerTags, stripSpeakerTags, type SpeakerSegment } from "../../lib/speaker-tags";
 import DOMPurify from "dompurify";
 import type { CharacterMap, ExpressionAvatarResolver, MessageSelectionToggle, PersonaInfo } from "./chat-area.types";
 import { GenerationReplayDetailsModal, hasGenerationReplayDetails } from "./GenerationReplayDetailsModal";
@@ -246,8 +247,6 @@ interface ChatMessageProps {
 /** Regex to match a plain image URL as the entire content. */
 const IMAGE_URL_RE = /^https?:\/\/\S+\.(?:gif|png|jpe?g|webp)(?:\?[^\s]*)?$/i;
 
-/** Regex to match <speaker="name">dialogue</speaker> tags. */
-const SPEAKER_TAG_RE = /<speaker="([^"]*)">([\s\S]*?)<\/speaker>/g;
 const INLINE_MARKDOWN_CONTAINER_RE =
   /\*\*\*[\s\S]+?\*\*\*|\*\*[\s\S]+?\*\*|__[\s\S]+?__|(?<!\*)\*(?!\*)[\s\S]+?(?<!\*)\*(?!\*)|==[\s\S]+?==|~~[\s\S]+?~~|(?<![_\w])_[^_]+?_(?![_\w])/g;
 
@@ -262,36 +261,40 @@ function renderWithSpeakerTags(
   boldDialogue = true,
 ): ReactNode[] {
   const renderLine = (line: string, color = defaultDialogueColor) => highlightDialogue(line, color, boldDialogue);
+  const speakerSegments = parseSpeakerTags(text);
 
-  if (!speakerColorMap || !SPEAKER_TAG_RE.test(text)) {
+  if (!speakerSegments) {
     return renderLine(text, defaultDialogueColor);
   }
-  SPEAKER_TAG_RE.lastIndex = 0;
 
   const nodes: ReactNode[] = [];
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
   let key = 0;
 
-  while ((match = SPEAKER_TAG_RE.exec(text)) !== null) {
-    // Text before the speaker tag — use default color
-    if (match.index > lastIndex) {
-      nodes.push(...renderLine(text.slice(lastIndex, match.index), defaultDialogueColor));
+  for (const segment of speakerSegments) {
+    if (segment.kind === "narration") {
+      nodes.push(...renderLine(segment.text, defaultDialogueColor));
+      continue;
     }
-    const speakerName = match[1]!;
-    const dialogue = match[2]!;
-    const speakerColor = speakerColorMap.get(speakerName) ?? defaultDialogueColor;
-    // Render the dialogue content (without the tags) using the speaker's color
-    nodes.push(<span key={`s${key++}`}>{renderLine(dialogue, speakerColor)}</span>);
-    lastIndex = match.index + match[0].length;
-  }
 
-  // Remaining text after last speaker tag
-  if (lastIndex < text.length) {
-    nodes.push(...renderLine(text.slice(lastIndex), defaultDialogueColor));
+    const speakerColor = speakerColorMap?.get(segment.name) ?? defaultDialogueColor;
+    nodes.push(<span key={`s${key++}`}>{renderLine(segment.text, speakerColor)}</span>);
   }
 
   return nodes;
+}
+
+function renderHtmlSpeakerSegments(
+  segments: SpeakerSegment[] | null,
+  speakerColorMap: Map<string, string> | undefined,
+): string | null {
+  if (!segments) return null;
+  return segments
+    .map((segment) => {
+      if (segment.kind === "narration") return segment.text;
+      const color = speakerColorMap?.get(segment.name);
+      return color ? `<span data-spk="${color}">${segment.text}</span>` : segment.text;
+    })
+    .join("");
 }
 
 function collectInlineMarkdownRanges(text: string): Array<[number, number]> {
@@ -559,7 +562,7 @@ function renderContent(
   const normalized = formatTextQuotes(text, quoteFormat);
 
   // Strip speaker tags before HTML detection (they aren't real HTML)
-  const withoutSpeakerTags = normalized.replace(/<\/?speaker(?:="[^"]*")?>/g, "");
+  const withoutSpeakerTags = stripSpeakerTags(normalized);
 
   if (!HTML_TAG_RE.test(withoutSpeakerTags)) {
     // renderWithHeadings handles headings, *** and --- horizontal rules,
@@ -570,12 +573,7 @@ function renderContent(
   }
 
   // For HTML content, replace speaker tags with color-annotated spans (preserves per-character colors)
-  const stripped = speakerColorMap
-    ? normalized.replace(SPEAKER_TAG_RE, (_, name, dialogue) => {
-        const color = speakerColorMap.get(name as string);
-        return color ? `<span data-spk="${color}">${dialogue as string}</span>` : (dialogue as string);
-      })
-    : normalized.replace(SPEAKER_TAG_RE, "$2");
+  const stripped = renderHtmlSpeakerSegments(parseSpeakerTags(normalized), speakerColorMap) ?? normalized;
 
   const { html: strippedWithoutStyleBlocks, css: rawStyleBlocks } = extractChatStyleBlocks(stripped);
 
