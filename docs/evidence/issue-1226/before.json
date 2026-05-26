@@ -1,0 +1,27 @@
+{
+  "viewportWidth": 320,
+  "documentScrollWidth": 320,
+  "bodyScrollWidth": 320,
+  "aiMakerRect": {
+    "left": 232.875,
+    "right": 340.8125,
+    "width": 107.9375,
+    "top": 131.671875,
+    "bottom": 165.140625
+  },
+  "actionRowRect": {
+    "left": 12.75,
+    "right": 307.25,
+    "width": 294.5,
+    "scrollWidth": 328,
+    "clientWidth": 295,
+    "overflowX": "auto"
+  },
+  "headerRect": {
+    "left": 0,
+    "right": 320,
+    "width": 320
+  },
+  "clippedRight": true,
+  "fullyVisible": false
+}
